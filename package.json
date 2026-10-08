@@ -3,21 +3,45 @@
   "displayName": "Turbo Code Palette",
   "description": "A fast, visual snippet palette designed to supercharge competitive programming workflows.",
   "version": "0.0.1",
+  "publisher": "oz-coden",
   "engines": {
     "vscode": "^1.134.0"
   },
   "categories": [
-    "Other"
+    "Snippets"
   ],
+  "extensionKind": ["workspace"],
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "turbo-code-palette.helloWorld",
-        "title": "Hello World"
+        "command": "turbo-code-palette.openDropTarget",
+        "title": "Turbo Code Palette: Open Phase 0 Drop Target"
+      },
+      {
+        "command": "turbo-code-palette.insertDemo",
+        "title": "Insert Demo Snippet"
+      },
+      {
+        "command": "turbo-code-palette.previewDemo",
+        "title": "Preview Demo Snippet"
+      },
+      {
+        "command": "turbo-code-palette.showDiagnostics",
+        "title": "Turbo Code Palette: Show Phase 0 Diagnostics"
       }
-    ]
+    ],
+    "viewsContainers": {
+      "activitybar": [{ "id": "turbo-code-palette", "title": "Turbo Code Palette", "icon": "media/palette.svg" }]
+    },
+    "views": {
+      "turbo-code-palette": [{ "id": "turbo-code-palette.snippets", "name": "Snippets (Phase 0)" }]
+    },
+    "menus": {
+      "view/title": [{ "command": "turbo-code-palette.openDropTarget", "when": "view == turbo-code-palette.snippets", "group": "navigation" }],
+      "view/item/context": [{ "command": "turbo-code-palette.insertDemo", "when": "view == turbo-code-palette.snippets && viewItem == tcp.phase0.snippet", "group": "inline" }]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
@@ -28,10 +52,14 @@
     "package": "npm run check-types && npm run lint && node esbuild.js --production",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
-    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "pretest": "npm run compile-tests && npm run compile",
     "check-types": "tsc --noEmit",
     "lint": "eslint src",
-    "test": "vscode-test"
+    "test": "vscode-test",
+    "test:unit": "npm run compile-tests && node --test out/test/unit/*.test.js scripts/public-repo-rules.test.mjs",
+    "test:host": "npm run compile-tests && npm run compile && node scripts/run-host-tests.mjs",
+    "dev:host": "npm run compile && node scripts/launch-dev-host.mjs",
+    "check-public": "node scripts/check-public-repo.mjs"
   },
   "devDependencies": {
     "@types/vscode": "^1.134.0",

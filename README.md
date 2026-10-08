@@ -2,13 +2,25 @@
 
 VS Codeで再利用可能なコードを探し、ドラッグまたはInsertで挿入するための拡張です。SnippetをGlobal/Workspaceで管理し、自己完結したPackとして配布する構想です。
 
-**現在は実装前レビュー段階です。** 実行可能なコードはVS Code生成ひな形のHello Worldのみで、Snippet管理等の製品機能はまだ実装されていません。
+**現在はPhase 0のD&D実証版です。** native Snippet TreeViewから合成demoをeditorへ挿入できます。実Snippet/Pack管理等の製品機能はまだ実装していません。
 
 - [v1仕様書](docs/product-spec.md)
 - [設計・API・セキュリティ監査と段階的な実装計画](docs/architecture-review.md)
+- [Phase 0の結果・検証範囲・未解決事項](docs/phase0-results.md)
+- [公開repositoryのチェック手順](docs/public-repository-security.md)
 - [GitHubリポジトリ](https://github.com/oz-coden/turbo-code-palette)
 
-仕様書は最初に監査を行い、レビュー承認後に段階的な実装へ進むよう指定しています。監査の判定は **GO WITH NOTES** です。D&Dの最小試作、Pack依存の適用範囲、C# providerのruntimeを確認してから実装します。
+設計レビューを承認後、Phase 0を実装・検証しました。cursor/EOFのnative D&Dと一回のUndoを確認しています。formatVersionとasset versionは独立させ、意味不変migrationではasset version増加を要求しない方針です。
+
+## D&Dの操作
+
+**Snippetを掴む → editorへ移動 → ドロップ直前にShiftを押す → マウスを離す**の順です。Shiftを最初から押して行をクリックする操作やShift+右クリックではありません。明示Insertも使えます。
+
+```sh
+npm run dev:host
+```
+
+隔離されたExtension Development Hostで、command paletteから`Turbo Code Palette: Open Phase 0 Drop Target`を実行します。2つのdemoを挿入し、Ctrl+Zで戻せます。このdemoは個人のGlobal/Workspace Snippet dataを作りません。
 
 ## 開発
 
@@ -17,17 +29,21 @@ Node.js/npmを使います。現在のVS Code engineは`^1.134.0`です。
 ```sh
 npm ci
 npm run compile
-npm run compile-tests
+npm run test:unit
 ```
 
 `compile`は型チェック、lint、esbuildを実行します。VS Codeでこのfolderを開いてF5を押すとExtension Development Hostを起動できます。
 
 ```sh
 npm test
+npm run test:host
 npm run package
+npm run check-public -- --history
 ```
 
-`test`はVS Codeのテスト用runtimeを取得し、GUIのExtension Hostを起動する場合があります。現在のテストは生成ひな形のサンプルのみです。`package`は配布用JavaScript bundleのビルドで、VSIX生成やMarketplace公開は行いません。
+`test:unit`はVS Codeなしの13件のテスト、`test`は固定した最低対応版1.134.0のGUI Hostで11件のintegrationテストを実行します。`test:host`はインストール済みWindows VS Codeを使い、個人profileを共有しません。別環境ではTCP_VSCODE_EXECUTABLEを指定できます。テスト/downloadにはネットワーク・GUI実行が必要です。
+
+`package`は配布用JavaScript bundleのビルドで、VSIX生成やMarketplace公開は行いません。commit/push前にはpublic scanに加えstatus・tracked files・diffを確認してください。
 
 ## 実装予定
 

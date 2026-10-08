@@ -102,12 +102,14 @@ unknownの巨大numberを`JSON.parse`で丸めて書き戻さない。未編集s
 
 Upgradeはメモリーで変換後、temp siblingへ書き、元fingerprint再確認後に置換する。failureで原本維持。future formatのbyte copy/exportは可能だが依存修復はしない。手動raw編集をTCPが完全禁止できるという意味ではない。
 
-format/metadata変更もcontent差なので、一部copyのUpgradeで同UUID/version conflictになり得る。変換でcontentが変わるならversion増加または全identical copyの明示更新が必要。Upgradeをidentityの例外にしない。
+`formatVersion`はTCP metadata schemaのrevision、`version`はSnippet/Packのasset revisionであり独立する。意味を保持したmigrationはformatVersionだけをin-place更新でき、asset version増加や全copy同時更新を要求しない。source、意味論、依存関係等のassetの意味が変わるmigrationだけ通常のasset version更新規則を適用する（レビュー承認時の修正）。
+
+物理treeのintegrity hashとassetのsemantic fingerprintを分ける。対応format間をlosslessなsemantic viewへ変換し、schema表現だけの差とformatVersion自体をasset conflictから除外する。unknown fieldsは保持しsemantic比較から勝手に除外しない。対応できないfuture formatは意味の同一性を推測せずread-onlyで扱う。migrationの実装と同一性テストはPhase 1で行う。
 
 ### 4.2 content/identityの定義案
 
 - UUID構文検証、比較時lowercase正規化。rawは勝手に書き換えない。
-- SHA-256 fingerprint: metadataのobject key順/空白を無視、array順/unknown fieldを保持。stringは値で比較、unknown numberは原文tokenなので`1`/`1.0`の差もcontent差と明記する。
+- SHA-256 integrity fingerprint: metadataのobject key順/空白を無視、array順/unknown fieldを保持。stringは値で比較、unknown numberは原文tokenなので`1`/`1.0`の差を保持する。asset conflictには上記のformat非依存semantic fingerprintを使い、意味不変migrationの表現差をconflict扱いしない。
 - Snippet contentはmetadataとfolder内の全regular file（README/LICENSE等も）のrelative pathとbyte hash。改行差もcontent差。asset内の`.git`、symlink、junction等は拒否。
 - Packはmetadataと全Snippet/その他fileのtree fingerprint。外側folder名、scope、mtime、user stateを含めない。`pack.json`へcanonical member一覧を追加しない。
 - 同UUID/version/hashはlogical cardへ集約して全location表示。hashが違えばconflict group、黙って挿入しない。

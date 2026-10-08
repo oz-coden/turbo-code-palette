@@ -1,5 +1,51 @@
-out
-dist
-node_modules
+# Dependencies and build/test output
+node_modules/
+dist/
+out/
+coverage/
+.nyc_output/
 .vscode-test/
+test-results/
+playwright-report/
 *.vsix
+*.tsbuildinfo
+csharp/**/bin/
+csharp/**/obj/
+
+# Secrets and local-only configuration (template files remain publishable)
+.env
+.env.*
+!.env.example
+!.env.template
+*.pem
+*.p12
+*.pfx
+.npmrc
+.vscode/*.local.*
+*.code-workspace
+.idea/
+.agents/
+.codex/
+.aws/
+
+# OS/editor scratch files and temporary runtime assets
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+*.log
+logs/
+.tmp/
+tmp/
+*.tmp
+*.tcp-sp
+!src/test/fixtures/**/*.tcp-sp
+.tcp-staging/
+.tcp-transactions/
+
+# Repository development must not publish personal snippet storage.
+# Deliberate test fixtures live under src/test/fixtures instead.
+/.snippets/
+/.tcp-global/
