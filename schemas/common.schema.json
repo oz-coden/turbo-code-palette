@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "uuid": { "type": "string", "pattern": "^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$" },
+    "version": { "type": "string", "pattern": "^v(0|[1-9][0-9]{0,31})\\.(0|[1-9][0-9]{0,31})\\.(0|[1-9][0-9]{0,31})(-(0|[1-9][0-9]{0,31}))?$" },
+    "strings": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "base": {
+      "type": "object",
+      "required": ["id", "name", "version"],
+      "additionalProperties": true,
+      "properties": {
+        "formatVersion": { "type": "integer", "minimum": 0, "description": "Metadata schema version. Missing/0 is legacy; 1 current; future versions are read-only in TCP." },
+        "id": { "$ref": "#/definitions/uuid" },
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "$ref": "#/definitions/version", "description": "Asset revision, independent from formatVersion." },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "notes": { "type": "string" },
+        "status": { "type": "string" },
+        "languages": { "$ref": "#/definitions/strings" },
+        "tags": { "$ref": "#/definitions/strings" },
+        "features": { "$ref": "#/definitions/strings" },
+        "authors": { "type": "array", "items": { "oneOf": [ { "type": "string" }, { "type": "object", "properties": { "name": { "type": "string" } }, "additionalProperties": true } ] } }
+      }
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "formatVersion": 1,
+  "id": "00000000-0000-0000-0000-000000000001",
+  "name": "Minimum",
+  "version": "v1.0.0-0",
+  "sources": ["code.cs"],
+  "languages": ["C#"],
+  "tags": ["numeric", "small helper"],
+  "category": "Algorithms",
+  "features": ["comparison"],
+  "description": "Returns the smaller integer.",
+  "authors": [{ "name": "Fixture Author", "custom": { "example": true } }],
+  "insert": { "defaultMode": "cursor", "custom": { "wide": 9007199254740993123456789 } },
+  "dependencies": [],
+  "custom": { "huge": 1234567890123456789012345678901234567890, "fraction": 1.0000000000000000001, "nested": [{ "flag": true }] }
+}

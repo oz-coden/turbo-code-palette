@@ -34,6 +34,8 @@ async function main() {
 		sourcemap: !production,
 		sourcesContent: false,
 		platform: 'node',
+		// Bundle published ESM entries: jsonc-parser's UMD factory uses dynamic require.
+		mainFields: ['module', 'main'],
 		outfile: 'dist/extension.js',
 		external: ['vscode'],
 		logLevel: 'silent',

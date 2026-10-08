@@ -1,4 +1,4 @@
-name: Phase 0 checks
+name: Build and phase checks
 
 on: [push, pull_request]
 
@@ -7,7 +7,10 @@ permissions:
 
 jobs:
   build-and-unit:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
         with:

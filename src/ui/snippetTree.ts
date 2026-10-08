@@ -15,7 +15,7 @@ export class SnippetTree implements vscode.TreeDataProvider<DemoSnippet>, vscode
 		item.description = snippet.mode;
 		item.contextValue = 'tcp.phase0.snippet';
 		item.iconPath = new vscode.ThemeIcon('code');
-		item.tooltip = `${snippet.name}: Drag into the editor, then hold Shift before releasing. Or use Insert Demo Snippet.`;
+		item.tooltip = `${snippet.name}: Choose an editor position, then use Insert Demo Snippet.`;
 		item.command = { command: 'turbo-code-palette.previewDemo', title: 'Preview', arguments: [snippet] };
 		return item;
 	}

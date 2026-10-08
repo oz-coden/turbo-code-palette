@@ -10,18 +10,20 @@
   "categories": [
     "Snippets"
   ],
-  "extensionKind": ["workspace"],
+  "extensionKind": [
+    "workspace"
+  ],
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "turbo-code-palette.openUxLab",
-        "title": "Turbo Code Palette: Open D&D UX Lab (Research)"
+        "command": "turbo-code-palette.reloadCatalog",
+        "title": "Turbo Code Palette: Reload Phase 1 Catalog"
       },
       {
-        "command": "turbo-code-palette.showUxLabDiagnostics",
-        "title": "Turbo Code Palette: Show D&D UX Lab Diagnostics"
+        "command": "turbo-code-palette.searchCatalog",
+        "title": "Turbo Code Palette: Search Phase 1 Catalog (Read Only)"
       },
       {
         "command": "turbo-code-palette.openDropTarget",
@@ -41,19 +43,63 @@
       }
     ],
     "viewsContainers": {
-      "activitybar": [{ "id": "turbo-code-palette", "title": "Turbo Code Palette", "icon": "media/palette.svg" }]
+      "activitybar": [
+        {
+          "id": "turbo-code-palette",
+          "title": "Turbo Code Palette",
+          "icon": "media/palette.svg"
+        }
+      ]
     },
     "views": {
       "turbo-code-palette": [
-        { "id": "turbo-code-palette.snippets", "name": "Snippets (Phase 0)" },
-        { "id": "turbo-code-palette.uxNative", "name": "UX Lab Native", "when": "tcp.uxLab" },
-        { "id": "turbo-code-palette.uxCards", "name": "UX Lab Cards", "type": "webview", "when": "tcp.uxLab" }
+        {
+          "id": "turbo-code-palette.snippets",
+          "name": "Insertion Demos"
+        }
       ]
     },
     "menus": {
-      "view/title": [{ "command": "turbo-code-palette.openDropTarget", "when": "view == turbo-code-palette.snippets", "group": "navigation" }],
-      "view/item/context": [{ "command": "turbo-code-palette.insertDemo", "when": "view == turbo-code-palette.snippets && viewItem == tcp.phase0.snippet", "group": "inline" }]
-    }
+      "view/title": [
+        {
+          "command": "turbo-code-palette.openDropTarget",
+          "when": "view == turbo-code-palette.snippets",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "turbo-code-palette.insertDemo",
+          "when": "view == turbo-code-palette.snippets && viewItem == tcp.phase0.snippet",
+          "group": "inline"
+        },
+        {
+          "command": "turbo-code-palette.insertDemo",
+          "when": "view == turbo-code-palette.snippets && viewItem == tcp.phase0.snippet",
+          "group": "1_insert"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Turbo Code Palette",
+      "properties": {
+        "turboCodePalette.globalRoot": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Absolute global library directory on the extension host. Empty uses extension storage. Phase 1 only reads existing libraries."
+        },
+        "turboCodePalette.enableAuxiliaryDragAndDrop": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable optional native demo drag and drop (reload window required). Move over the editor, hold Shift, then release the mouse. Use Insert for the primary workflow. This feature may be removed if it conflicts with VS Code or other drop actions."
+        }
+      }
+    },
+    "jsonValidation": [
+      { "fileMatch": "**/snippet.json", "url": "./schemas/snippet.schema.json" },
+      { "fileMatch": "**/pack.json", "url": "./schemas/pack.schema.json" }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
@@ -62,7 +108,7 @@
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
     "package": "npm run check-types && npm run lint && node esbuild.js --production",
-    "compile-tests": "tsc -p . --outDir out",
+    "compile-tests": "node scripts/compile-tests.mjs",
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "npm run compile-tests && npm run compile",
     "check-types": "tsc --noEmit",
@@ -71,24 +117,25 @@
     "test:unit": "npm run compile-tests && node --test out/test/unit/*.test.js scripts/public-repo-rules.test.mjs",
     "test:host": "npm run compile-tests && npm run compile && node scripts/run-host-tests.mjs",
     "dev:host": "npm run compile && node scripts/launch-dev-host.mjs",
-    "dev:ux": "npm run compile && node scripts/launch-dev-host.mjs --ux-lab",
-    "dev:ux:min": "npm run compile && node scripts/launch-dev-host.mjs --ux-lab --minimum",
     "check-public": "node scripts/check-public-repo.mjs"
   },
   "devDependencies": {
-    "@types/vscode": "^1.134.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "24.x",
-    "typescript-eslint": "^8.61.1",
-    "eslint": "^10.5.0",
+    "@types/vscode": "^1.134.0",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.0.0",
     "esbuild": "^0.28.1",
+    "eslint": "^10.5.0",
     "npm-run-all": "^4.1.5",
     "typescript": "^6.0.3",
-    "@vscode/test-cli": "^0.0.15",
-    "@vscode/test-electron": "^3.0.0"
+    "typescript-eslint": "^8.61.1"
   },
   "overrides": {
     "diff": "^8.0.4",
     "serialize-javascript": "^7.0.6"
+  },
+  "dependencies": {
+    "jsonc-parser": "3.3.1"
   }
 }

@@ -1,6 +1,6 @@
 # Phase 0追加調査: editorへのD&D UX
 
-調査日: 2026-10-08（日本時間）。Phase 1の実装は開始していない。技術的な挿入可否と、製品の主操作としての採用判断を分ける。
+調査日: 2026-10-08（日本時間）。本文は調査時点の証拠を保存する。2026-10-09に明示Insert主操作の方針が承認され、Phase 1へ進んだ。現在の決定は[明示Insert方針](insertion-ux-policy.md)を参照。Research command/sourceはPhase 1で除去し、再現用の当時のsourceはGitの`2df07c1`に残る。
 
 ## 結論と推奨
 
@@ -8,7 +8,7 @@
 
 主操作には明示的な**Insertボタン/command**を推奨する。editorでカーソルを指定し、SnippetのInsertを選ぶ。キーボード利用者にはcommandからの選択・挿入を用意する方針が適する。Shift-required D&Dは、drop位置を直接指定したい利用者向けの補助操作として残せる。Shift-required D&DだけをコアUXとして正式採用することは推奨しない。
 
-この提案で製品UXを確定してはいない。既存demoのclickはpreview、明示Insertは挿入のままとし、今回の比較UIはResearch commandでのみ開く。検索Quick Pickや実Snippetの入力/conflict処理は後続実装の候補であり、今回実装していない。
+調査時点では製品UXを確定していなかった。その後、明示Insert主操作が承認された。以下の比較UI/commandの説明は当時のPoCについての記録である。
 
 ## Shiftの役割と公開APIの範囲
 

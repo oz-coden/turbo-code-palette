@@ -2,19 +2,19 @@
 
 レビュー日: 2026-10-08（日本時間）。対象は提供仕様書、既存リポジトリ、公式VS Code API、ローカルの`@types/vscode@1.134.0`。
 
-この文書は実装前の提案であり、実装済み機能を示さない。仕様書第26節とInitial Codex Promptに従い、今回は監査・計画まで。レビュー承認後に段階的な実装へ進む。
+初回レビューの提案を保持し、承認後の修正を追記した設計文書。現在の実装状況は[Phase 1結果](phase1-results.md)、優先するUX決定は[明示Insert方針](insertion-ux-policy.md)を参照。提供仕様書内のInitial Codex Promptは履歴として保存し、その後の利用者指示が優先する。
 
 ## 1. 判定: GO WITH NOTES
 
-言語非依存のSnippet/Pack管理、挿入、ZIP入出力、基本Clean Copyは実装可能。「探す → ドラッグまたはInsert → コードが入る」を維持できる。
+言語非依存のSnippet/Pack管理、挿入、ZIP入出力、基本Clean Copyは実装可能。承認済みの基本UXは「editorで位置を選ぶ → Snippetを検索/選択 → Insertを実行」。
 
 着手前に以下の扱いを確認する。
 
-1. **D&Dを優先し、一覧はまずnative TreeViewにする。** Extensions風の自由なカードレイアウトはTreeViewの公開APIで提供されない。WebviewからeditorへのD&Dをnative TreeViewと同じ保証のある経路とは扱わない。詳細とmetadata formはWebviewにする。
+1. **明示Insertを優先し、一覧はnative TreeViewにする。** 一覧button・右クリック・Command Palette/keyboard・Pack詳細のSnippetは共通Insertion pipelineへ接続する。詳細とmetadata formはWebviewにする。D&Dは無効でも主要機能が成立する補助機能。追加改修が必要なら廃止を検討し、未知の競合やVS Code干渉が生じたら積極的に廃止する。Webview D&D/raw fallback/非公開APIによる通常dropの追求は行わない。
 2. **Pack自己完結性とWorkspace優先の適用場面を分ける。** 既存Pack内の依存はそのPackから解決する。Workspace → Globalは候補選択と新Pack/コピーの依存閉包構築に使う。別Packから黙って不足を補い、不正Packを隠さない。
 3. **高度C#操作はRoslynに委譲する。** regexによる構造挿入、unused using削除、意味的Bundleは安全な代替にならない。基本TCPを.NET非依存で先に完成させる。
 
-APIの存在と型は確認したが、TCP固有のD&DをExtension Development Hostで動作検証したわけではない。Phase 0の最小試作を合格条件にする。
+初回レビュー時にはAPIの型のみを確認していた。その後のPhase 0実Host実証と追加UX調査は完了・承認済み。実マウスとprovider直接呼出しの証拠は分けて結果文書に記録する。
 
 ## 2. リポジトリ評価
 
@@ -289,11 +289,11 @@ licenseNotices[].textは収集/dedupし安全な対象言語commentとして出�
 
 ## 11. 段階的実装計画
 
-各phaseは責務単位のまとまりでcommit/pushし、acceptance通過後に次へ進む。下記fileは予定。
+各phaseは責務単位のまとまりでcommit/pushし、acceptance結果を報告する。Phase 1完了後はPhase 2へ自動で進まない。下記fileは予定。
 
 ### Phase 0 — scaffoldとD&D実証
 
-技術実証後のUX採用判断は[D&D UX追加調査](dnd-ux-investigation.md)を参照。Shift-required D&Dを唯一の主操作に固定せず、明示Insertを主操作とする案を検討中。Phase 1は未着手。
+技術実証後の調査は[D&D UX追加調査](dnd-ux-investigation.md)を参照。主操作は明示Insertに確定。Phase 1では基盤を実装し、Phase 2/3の製品UI・挿入統合は別gateとする。
 
 - 目標/ファイル: package、extension lifecycle、最小TreeView/dropProvider、unit runner、integration fixture、CI。
 - テスト: type/lint/build、activation、通常/Shift drop、位置、空insertText+additionalEdit、Undo、cancel、別document、drop無効設定。
@@ -318,7 +318,7 @@ licenseNotices[].textは収集/dedupし安全な対象言語commentとして出�
 
 - 目標/ファイル: insertion/template/dependency graph、genericProvider、commands/dropProvider。
 - テスト: mode precedence、SCC/topology、diamond/backtracking、name warning、適合なし、全source input1回、required/cancel/literal replacement、stale/overlap、separate-files非上書き。
-- 合格: drop/右クリックInsertは同plan。通常は余分なpromptなし。不正planで部分code/file変更なし。
+- 合格: 一覧button/右クリック/command/Pack詳細の明示Insertは同plan。補助dropを残す場合も同planへ接続する。通常は余分なpromptなし。不正planで部分code/file変更なし。D&Dなしで主要機能が成立する。
 - リスク: async入力/document変更、既存依存識別、multi-file rollback。
 
 ### Phase 4 — ZIP/preview/conflict
