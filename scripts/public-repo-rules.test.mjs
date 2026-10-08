@@ -15,13 +15,13 @@ test('machine paths and credentials are flagged without returning their values',
 });
 
 test('required source, lockfile, fixtures and portable IDE files stay publishable', () => {
-  for (const file of ['src/extension.ts', 'package-lock.json', 'docs/product-spec.md', '.vscode/launch.json', 'src/test/fixtures/example.cs', 'src/test/fixtures/pack.tcp-sp', '.env.example']) {
+  for (const file of ['src/extension.ts', 'package-lock.json', 'docs/product-spec.md', '.vscode/launch.json', 'src/test/fixtures/example.cs', 'src/test/fixtures/pack.tcp-sp', 'src/test/fixtures/.snippets/Default/pack.json', '.env.example']) {
     assert.equal(forbiddenPublicFile(file), false, file);
   }
 });
 
 test('tracked generated files are forbidden even when gitignore would hide them', () => {
-  for (const file of ['node_modules/package/index.js', 'csharp/Tcp.CSharp/bin/a.dll', 'csharp/Tcp.CSharp/obj/a.json', '.vscode-test/logs/log.txt', '.env.production', '.snippets/Default/snippet.json', 'dist/extension.js']) {
+  for (const file of ['node_modules/package/index.js', 'csharp/Tcp.CSharp/bin/a.dll', 'csharp/Tcp.CSharp/obj/a.json', '.vscode-test/logs/log.txt', '.env.production', '.snippets/Default/snippet.json', 'nested-workspace/.snippets/Default/pack.json', 'dist/extension.js']) {
     assert.equal(forbiddenPublicFile(file), true, file);
   }
 });

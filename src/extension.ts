@@ -6,27 +6,28 @@ import { demoSnippets, dropTargetText } from './phase0/fixtures';
 import { SnippetTree } from './ui/snippetTree';
 import { DROP_KIND, SnippetDropProvider } from './ui/dropProvider';
 import { Catalog } from './storage/catalog';
-import { resolveRoots } from './storage/roots';
-import { nativeReader } from './storage/reader';
-import { vscodeReader } from './storage/vscodeReader';
+import { LibraryController } from './application/controller';
 
 export interface Phase0Api {
 	readonly tree: SnippetTree;
 	readonly dropProvider: SnippetDropProvider;
 	readonly sessions: DragSessions;
 	readonly catalog: Catalog;
+	readonly product: LibraryController;
 }
 
 export function activate(context: vscode.ExtensionContext): Phase0Api {
 	const sessions = new DragSessions(randomUUID);
 	const tree = new SnippetTree(demoSnippets, sessions);
 	const dropProvider = new SnippetDropProvider(sessions);
-	const catalog = new Catalog();
+	const product = new LibraryController(context);
+	const catalog = product.library.catalog;
 	const enableDrag = vscode.workspace.getConfiguration('turboCodePalette').get<boolean>('enableAuxiliaryDragAndDrop', false);
-	const view = vscode.window.createTreeView('turbo-code-palette.snippets', {
+	const view = vscode.window.createTreeView('turbo-code-palette.demos', {
 		treeDataProvider: tree, dragAndDropController: enableDrag ? tree : undefined, canSelectMany: true,
 	});
 	view.message = 'Choose a position in the editor, select a demo snippet, then use Insert.';
+	void vscode.commands.executeCommand('setContext', 'tcp.showDemos', vscode.workspace.getConfiguration('turboCodePalette').get<boolean>('showDevelopmentDemos', false));
 	const output = vscode.window.createOutputChannel('Turbo Code Palette');
 	let insertionTarget: { document: vscode.TextDocument; position: vscode.Position } | undefined;
 	const remember = (editor: vscode.TextEditor | undefined) => {
@@ -42,43 +43,7 @@ export function activate(context: vscode.ExtensionContext): Phase0Api {
 		context.subscriptions.push(vscode.languages.registerDocumentDropEditProvider([{ scheme: 'file' }, { scheme: 'untitled' }], dropProvider,
 			{ dropMimeTypes: [URI_LIST_MIME], providedDropEditKinds: [DROP_KIND] }));
 	}
-	context.subscriptions.push(view, output, rememberEditor, rememberSelection,
-		vscode.commands.registerCommand('turbo-code-palette.reloadCatalog', async () => {
-			if (vscode.workspace.workspaceFolders?.some(folder => folder.uri.scheme !== 'file')) {
-				void vscode.window.showWarningMessage('Phase 1 catalog supports local filesystem storage only.');
-				return;
-			}
-			const configured = vscode.workspace.getConfiguration('turboCodePalette').get<string>('globalRoot');
-			const roots = resolveRoots(context.globalStorageUri.fsPath, (vscode.workspace.workspaceFolders ?? []).map(folder => ({
-				id: folder.uri.toString(), path: folder.uri.fsPath,
-			})), configured || undefined);
-			if (!configured && context.globalStorageUri.scheme !== 'file') {
-				const uri = vscode.Uri.joinPath(context.globalStorageUri, 'snippets');
-				roots[roots.length - 1] = { scope: 'global', path: uri.toString(), uri: uri.toString() };
-			}
-			const snapshot = await catalog.reload(roots, root => root.uri ? vscodeReader(vscode.Uri.parse(root.uri)) : nativeReader(root));
-			output.appendLine(JSON.stringify({ snippets: snapshot.snippets.length, packs: snapshot.packs.length,
-				diagnostics: snapshot.diagnostics.map(item => ({ scope: item.scope, code: item.code })) }));
-			// Command results can cross the RPC boundary: never return cyclic ASTs or BigInt.
-			return { snippets: snapshot.snippets.length, packs: snapshot.packs.length,
-				diagnostics: snapshot.diagnostics.map(item => ({ scope: item.scope, code: item.code })) };
-		}),
-		vscode.commands.registerCommand('turbo-code-palette.searchCatalog', async (query?: string) => {
-			if (!catalog.snapshot) { await vscode.commands.executeCommand('turbo-code-palette.reloadCatalog'); }
-			const input = query ?? await vscode.window.showInputBox({ prompt: 'Search the Phase 1 catalog (inspection only)', placeHolder: 'name lang:"C#" scope:workspace' });
-			if (input === undefined) { return; }
-			const result = catalog.search(input);
-			if (query === undefined) {
-				if (result.errors.length) { await vscode.window.showWarningMessage(result.errors.join(', ')); }
-				else { await vscode.window.showQuickPick(result.hits.map(hit => ({ label: hit.locations[0].metadata.name!,
-					description: `${hit.locations[0].metadata.version!.text} · ${hit.group.status}`,
-					detail: `${hit.locations.length} location(s) · catalog inspection; product UI follows in Phase 2`,
-				})), { placeHolder: 'Loaded catalog — read only' }); }
-			}
-			return { errors: result.errors, hits: result.hits.map(hit => ({ key: hit.group.key, name: hit.locations[0].metadata.name,
-				version: hit.locations[0].metadata.version!.text, status: hit.group.status, canInsert: hit.canInsert,
-				scopes: [...new Set(hit.locations.map(asset => asset.root.scope))] })) };
-		}),
+	context.subscriptions.push(product, view, output, rememberEditor, rememberSelection,
 		{ dispose: () => sessions.clear() },
 		vscode.workspace.registerTextDocumentContentProvider(DRAG_SCHEME, {
 			provideTextDocumentContent: uri => sessions.resolve(uri.toString())?.text ?? 'This demo preview has expired. Drag the snippet again.',
@@ -87,7 +52,8 @@ export function activate(context: vscode.ExtensionContext): Phase0Api {
 			const document = await vscode.workspace.openTextDocument({ language: 'plaintext', content: dropTargetText });
 			const editor = await vscode.window.showTextDocument(document, { preview: false });
 			editor.selection = new vscode.Selection(2, 0, 2, 0);
-			await vscode.commands.executeCommand('turbo-code-palette.snippets.focus');
+			await vscode.commands.executeCommand('setContext', 'tcp.showDemos', true);
+			await vscode.commands.executeCommand('turbo-code-palette.demos.focus');
 		}),
 		vscode.commands.registerCommand('turbo-code-palette.previewDemo', async (snippet: DemoSnippet) => {
 			if (!demoSnippets.includes(snippet)) { return; }
@@ -118,5 +84,5 @@ export function activate(context: vscode.ExtensionContext): Phase0Api {
 			return { tree: tree.diagnostics, drop: dropProvider.diagnostics };
 		}),
 	);
-	return { tree, dropProvider, sessions, catalog };
+	return { tree, dropProvider, sessions, catalog, product };
 }

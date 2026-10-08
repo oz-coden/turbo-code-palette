@@ -19,11 +19,13 @@
     "commands": [
       {
         "command": "turbo-code-palette.reloadCatalog",
-        "title": "Turbo Code Palette: Reload Phase 1 Catalog"
+        "title": "Turbo Code Palette: Reload Library",
+        "icon": "$(refresh)"
       },
       {
         "command": "turbo-code-palette.searchCatalog",
-        "title": "Turbo Code Palette: Search Phase 1 Catalog (Read Only)"
+        "title": "Turbo Code Palette: Search Snippets",
+        "icon": "$(search)"
       },
       {
         "command": "turbo-code-palette.openDropTarget",
@@ -40,7 +42,25 @@
       {
         "command": "turbo-code-palette.showDiagnostics",
         "title": "Turbo Code Palette: Show Phase 0 Diagnostics"
-      }
+      },
+      { "command": "turbo-code-palette.searchPacks", "title": "Turbo Code Palette: Search Packs", "icon": "$(search)" },
+      { "command": "turbo-code-palette.details", "title": "Turbo Code Palette: Show Details" },
+      { "command": "turbo-code-palette.edit", "title": "Turbo Code Palette: Edit Metadata", "icon": "$(edit)" },
+      { "command": "turbo-code-palette.newSnippet", "title": "Turbo Code Palette: New Snippet", "icon": "$(add)" },
+      { "command": "turbo-code-palette.createSelection", "title": "Turbo Code Palette: Create Snippet from Selection" },
+      { "command": "turbo-code-palette.createFile", "title": "Turbo Code Palette: Create Snippet from Current File" },
+      { "command": "turbo-code-palette.createPack", "title": "Turbo Code Palette: Create Pack", "icon": "$(add)" },
+      { "command": "turbo-code-palette.copyWorkspace", "title": "Turbo Code Palette: Copy to Workspace" },
+      { "command": "turbo-code-palette.copyGlobal", "title": "Turbo Code Palette: Copy to Global" },
+      { "command": "turbo-code-palette.delete", "title": "Turbo Code Palette: Delete", "icon": "$(trash)" },
+      { "command": "turbo-code-palette.favorite", "title": "Turbo Code Palette: Toggle Favorite", "icon": "$(star-empty)" },
+      { "command": "turbo-code-palette.filter", "title": "Turbo Code Palette: All / Favorites / Recent", "icon": "$(filter)" },
+      { "command": "turbo-code-palette.insert", "title": "Turbo Code Palette: Insert Snippet", "icon": "$(arrow-right)" },
+      { "command": "turbo-code-palette.upgrade", "title": "Turbo Code Palette: Upgrade Metadata Format" },
+      { "command": "turbo-code-palette.openGlobalFolder", "title": "Turbo Code Palette: Open Global Library Folder" },
+      { "command": "turbo-code-palette.revealGlobalFolder", "title": "Turbo Code Palette: Reveal Global Library" },
+      { "command": "turbo-code-palette.configureGlobalRoot", "title": "Turbo Code Palette: Configure Global Root" },
+      { "command": "turbo-code-palette.reviewRecovery", "title": "Turbo Code Palette: Review Interrupted Save" }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -55,7 +75,13 @@
       "turbo-code-palette": [
         {
           "id": "turbo-code-palette.snippets",
-          "name": "Insertion Demos"
+          "name": "Snippets"
+        },
+        { "id": "turbo-code-palette.packs", "name": "Packs" },
+        {
+          "id": "turbo-code-palette.demos",
+          "name": "Development Insertion Demos",
+          "when": "tcp.showDemos"
         }
       ]
     },
@@ -63,21 +89,41 @@
       "view/title": [
         {
           "command": "turbo-code-palette.openDropTarget",
-          "when": "view == turbo-code-palette.snippets",
+          "when": "view == turbo-code-palette.demos",
           "group": "navigation"
-        }
+        },
+        { "command": "turbo-code-palette.searchCatalog", "when": "view == turbo-code-palette.snippets", "group": "navigation@1" },
+        { "command": "turbo-code-palette.newSnippet", "when": "view == turbo-code-palette.snippets", "group": "navigation@2" },
+        { "command": "turbo-code-palette.searchPacks", "when": "view == turbo-code-palette.packs", "group": "navigation@1" },
+        { "command": "turbo-code-palette.createPack", "when": "view == turbo-code-palette.packs", "group": "navigation@2" },
+        { "command": "turbo-code-palette.reloadCatalog", "when": "view == turbo-code-palette.snippets || view == turbo-code-palette.packs", "group": "navigation@3" },
+        { "command": "turbo-code-palette.filter", "when": "view == turbo-code-palette.snippets || view == turbo-code-palette.packs", "group": "navigation@4" },
+        { "command": "turbo-code-palette.openGlobalFolder", "when": "view == turbo-code-palette.packs", "group": "library@1" },
+        { "command": "turbo-code-palette.revealGlobalFolder", "when": "view == turbo-code-palette.packs", "group": "library@2" },
+        { "command": "turbo-code-palette.configureGlobalRoot", "when": "view == turbo-code-palette.packs", "group": "library@3" }
       ],
       "view/item/context": [
         {
           "command": "turbo-code-palette.insertDemo",
-          "when": "view == turbo-code-palette.snippets && viewItem == tcp.phase0.snippet",
+          "when": "view == turbo-code-palette.demos && viewItem == tcp.phase0.snippet",
           "group": "inline"
         },
         {
           "command": "turbo-code-palette.insertDemo",
-          "when": "view == turbo-code-palette.snippets && viewItem == tcp.phase0.snippet",
+          "when": "view == turbo-code-palette.demos && viewItem == tcp.phase0.snippet",
           "group": "1_insert"
-        }
+        },
+        { "command": "turbo-code-palette.insert", "when": "viewItem == tcp.snippet", "group": "inline@1" },
+        { "command": "turbo-code-palette.insert", "when": "viewItem == tcp.snippet", "group": "1_insert" },
+        { "command": "turbo-code-palette.edit", "when": "viewItem == tcp.snippet || viewItem == tcp.pack", "group": "2_edit@1" },
+        { "command": "turbo-code-palette.favorite", "when": "viewItem == tcp.snippet || viewItem == tcp.pack", "group": "2_edit@2" },
+        { "command": "turbo-code-palette.copyWorkspace", "when": "(viewItem == tcp.snippet || viewItem == tcp.pack) && tcp.hasWorkspace", "group": "3_copy@1" },
+        { "command": "turbo-code-palette.copyGlobal", "when": "viewItem == tcp.snippet || viewItem == tcp.pack", "group": "3_copy@2" },
+        { "command": "turbo-code-palette.delete", "when": "viewItem == tcp.snippet || viewItem == tcp.pack", "group": "4_delete" }
+      ],
+      "editor/context": [
+        { "command": "turbo-code-palette.createSelection", "when": "editorHasSelection", "group": "tcp@1" },
+        { "command": "turbo-code-palette.createFile", "group": "tcp@2" }
       ]
     },
     "configuration": {
@@ -87,7 +133,11 @@
           "type": "string",
           "default": "",
           "scope": "machine",
-          "description": "Absolute global library directory on the extension host. Empty uses extension storage. Phase 1 only reads existing libraries."
+          "description": "Absolute Global library directory on the extension host. Empty uses extension storage. Open/Reveal Global Library or Configure Global Root makes these assets accessible. Reload explicitly after changing the root."
+        },
+        "turboCodePalette.showDevelopmentDemos": {
+          "type": "boolean", "default": false,
+          "description": "Show Phase 0 demonstration snippets (reload window required). Real Snippet insertion connects in Phase 3."
         },
         "turboCodePalette.enableAuxiliaryDragAndDrop": {
           "type": "boolean",

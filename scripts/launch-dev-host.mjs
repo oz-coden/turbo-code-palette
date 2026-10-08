@@ -14,7 +14,7 @@ mkdirSync(extensions, { recursive: true });
 writeFileSync(join(profile, 'User/settings.json'), JSON.stringify({
   'workbench.startupEditor': 'none',
   'workbench.colorTheme': 'Default Dark Modern',
-  'window.title': 'TCP Phase 1 — ${dirty}${activeEditorShort}',
+  'window.title': 'TCP Phase 2 — ${dirty}${activeEditorShort}',
   'editor.dropIntoEditor.enabled': true,
   'editor.fontSize': 16,
   'editor.minimap.enabled': false,
@@ -27,4 +27,4 @@ const child = spawn(executable, [
 ], { detached: true, windowsHide: true, stdio: 'ignore', env: { ...process.env, ELECTRON_RUN_AS_NODE: undefined } });
 child.on('error', () => { console.error('Could not launch the isolated Extension Development Host.'); process.exitCode = 1; });
 child.unref();
-console.log('Launched an isolated Phase 1 Host. Run “Turbo Code Palette: Reload Phase 1 Catalog”.');
+console.log('Launched an isolated Phase 2 Host. Open Turbo Code Palette in the Activity Bar, or run “Turbo Code Palette: New Snippet”.');

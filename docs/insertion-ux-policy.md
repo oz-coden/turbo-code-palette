@@ -24,4 +24,4 @@ native Shift-required D&Dは補助機能。Phase 1のdemoでは`turboCodePalette
 
 実験用UX LabはPhase 1でruntime/sourceから除去。比較結果は[D&D UX調査](dnd-ux-investigation.md)に保存し、PoC当時のsourceはGitの`2df07c1`で参照できる。
 
-Phase 1で実装するInsertは引き続き合成demoのみ。実Snippet/Packの全入口・依存/template等の完成をPhase 1の成果とは扱わない。Phase 1完了後は報告して停止し、Phase 2へ自動で進まない。
+Phase 1の実挿入は合成demoのみ。Phase 2では実Snippet一覧button・右クリック・command・Pack詳細buttonを共通`InsertionAdapter`へ接続した。handler未接続の現在は案内のみで、本文/file/usageを変更しない。完成pipelineはPhase 3の責務。合成demoは製品viewから分離し、既定非表示とした。[Phase 2結果](phase2-results.md)を参照。Phase 2完了後は報告して停止し、Phase 3へ自動で進まない。

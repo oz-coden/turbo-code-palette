@@ -114,6 +114,44 @@ export class MetadataDocument {
 		if (this.format !== 'legacy') { throw new Error('Only supported legacy metadata can be upgraded.'); }
 		return this.applyPath(['formatVersion'], 1);
 	}
+	appendDependency(value: { id: string; name: string; version?: string }): MetadataDocument {
+		if (this.format !== 'current' || Object.keys(value).some(key => !['id', 'name', 'version'].includes(key)) || Object.values(value).some(item => typeof item !== 'string')) { throw new Error('Invalid dependency entry.'); }
+		const node = this.node(['dependencies']);
+		if (node && node.type !== 'array') { throw new Error('Invalid dependency container.'); }
+		if (!node) { return this.applyPath(['dependencies'], [value]); }
+		return this.applyPath(['dependencies', node.children?.length ?? 0], value);
+	}
+	removeDependency(index: number): MetadataDocument {
+		if (this.format !== 'current' || !Number.isSafeInteger(index) || index < 0 || !this.node(['dependencies', index])) { throw new Error('Invalid dependency index.'); }
+		return this.removeArrayEntry('dependencies', index);
+	}
+	patchAuthors(names: readonly string[]): MetadataDocument {
+		if (this.format !== 'current' || names.some(name => typeof name !== 'string' || !name.trim())) { throw new Error('Invalid authors.'); }
+		const node = this.node(['authors']);
+		if (node && (node.type !== 'array' || node.children?.some((child, index) => child.type !== 'string' && (child.type !== 'object' || !this.string(['authors', index, 'name']))))) { throw new Error('Unrecognized author entries must be preserved. Use the raw metadata editor to modify them explicitly.'); }
+		let result: MetadataDocument = node ? this : this.applyPath(['authors'], []);
+		const length = node?.children?.length ?? 0;
+		for (let index = 0; index < Math.min(length, names.length); index++) {
+			const path = node!.children![index].type === 'string' ? ['authors', index] : ['authors', index, 'name'];
+			if (result.string(path) !== names[index]) { result = result.applyPath(path, names[index]); }
+		}
+		for (let index = length - 1; index >= names.length; index--) { result = result.removeArrayEntry('authors', index); }
+		for (let index = length; index < names.length; index++) { result = result.applyPath(['authors', index], names[index]); }
+		return result;
+	}
+	private removeArrayEntry(field: string, index: number): MetadataDocument {
+		const children = this.node([field])!.children!, child = children[index];
+		const start = index === children.length - 1 && index > 0 ? children[index - 1].offset + children[index - 1].length : child.offset;
+		const end = index < children.length - 1 ? children[index + 1].offset : child.offset + child.length;
+		// Remove the element and its comma by token offsets; jsonc-parser's last-element
+		// removal assumes whitespace before the closing bracket and can leave a token.
+		const result = new MetadataDocument(applyEdits(this.text, [{ offset: start, length: end - start, content: '' }]));
+		if (result.diagnostics.length) { throw new Error('Dependency removal produced invalid metadata.'); } return result;
+	}
+	removeDependencyVersion(index: number): MetadataDocument {
+		if (this.format !== 'current' || !Number.isSafeInteger(index) || index < 0 || this.node(['dependencies', index])?.type !== 'object') { throw new Error('Invalid dependency index.'); }
+		return this.applyPath(['dependencies', index, 'version'], undefined);
+	}
 	private applyPath(path: readonly (string | number)[], value: unknown): MetadataDocument {
 		// Formatting the insertion's enclosing range would rewrite untouched subtrees.
 		// Offset edits without formatting retain their exact original tokens and spacing.

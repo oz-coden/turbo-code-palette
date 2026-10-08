@@ -13,8 +13,15 @@ export function validateRelativePath(value: string): string {
 
 export function pathCollisionKey(value: string): string { return value.normalize('NFC').toUpperCase().normalize('NFC'); }
 
+/** Library/transaction prefixes have a separate budget from the 240-char asset-relative path. */
+export function validateStoragePath(value: string): string {
+	const parts = value.split('/');
+	if (value.length > 512 || parts.length > 128) { throw new Error('Storage path limit.'); }
+	for (const part of parts) { validateRelativePath(part); } return value;
+}
+
 export function containedPath(root: string, relative: string): string {
-	validateRelativePath(relative);
+	validateStoragePath(relative);
 	const result = path.resolve(root, ...relative.split('/'));
 	const check = path.relative(path.resolve(root), result);
 	if (!check || check.startsWith('..' + path.sep) || check === '..' || path.isAbsolute(check)) { throw new Error('Asset path escapes its root.'); }

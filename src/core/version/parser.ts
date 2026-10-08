@@ -16,3 +16,12 @@ export function compareVersions(left: AssetVersion, right: AssetVersion): number
 	}
 	return 0;
 }
+
+export function nextVersion(version: AssetVersion): string {
+	const parts = [...version.parts];
+	let index = 3;
+	while (index >= 0 && parts[index] === 10n ** 32n - 1n) { parts[index] = index === 3 ? -1n : 0n; index--; }
+	if (index < 0) { throw new Error('No supported newer version.'); }
+	parts[index]++;
+	return `v${parts[0]}.${parts[1]}.${parts[2]}${parts[3] < 0n ? '' : '-' + parts[3]}`;
+}

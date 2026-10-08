@@ -1,0 +1,11 @@
+body { color: var(--vscode-foreground); background: var(--vscode-editor-background); font-family: var(--vscode-font-family); padding: 20px 28px; max-width: 1000px; }
+h1 { font-size: 1.6em; } h2 { font-size: 1.15em; margin-top: 24px; }
+label { display: block; margin: 12px 0; }
+input, textarea { display: block; box-sizing: border-box; width: 100%; max-width: 700px; margin-top: 6px; padding: 7px; color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, transparent); font: inherit; }
+textarea { min-height: 64px; resize: vertical; }
+button { margin: 4px 6px 4px 0; padding: 5px 10px; border: 1px solid var(--vscode-button-border, transparent); color: var(--vscode-button-foreground); background: var(--vscode-button-background); cursor: pointer; font: inherit; }
+button:hover { background: var(--vscode-button-hoverBackground); }
+:focus-visible { outline: 2px solid var(--vscode-focusBorder); outline-offset: 2px; }
+details { margin: 15px 0; border-top: 1px solid var(--vscode-panel-border); padding-top: 12px; } summary { cursor: pointer; }
+pre { background: var(--vscode-textCodeBlock-background); padding: 12px; overflow: auto; max-height: 480px; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--vscode-editor-font-family); }
+li { margin: 5px 0; } ul { padding-left: 20px; } .notice, #feedback { color: var(--vscode-editorWarning-foreground); }

@@ -47,5 +47,7 @@ tmp/
 
 # Repository development must not publish personal snippet storage.
 # Deliberate test fixtures live under src/test/fixtures instead.
-/.snippets/
+.snippets/
+!src/test/fixtures/**/.snippets/
+!src/test/fixtures/**/.snippets/**
 /.tcp-global/

@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import type { LibraryReader } from './reader';
-import { validateRelativePath } from './safePaths';
+import { validateStoragePath } from './safePaths';
 
-/** Public workspace.fs only. URI storage is inspectable but not approved for physical writes/insertion. */
+/** Public workspace.fs reader. Physical file identity remains unverified for insertion. */
 export function vscodeReader(root: vscode.Uri): LibraryReader {
-	const uri = (relative: string) => relative ? vscode.Uri.joinPath(root, ...validateRelativePath(relative).split('/')) : root;
+	const uri = (relative: string) => relative ? vscode.Uri.joinPath(root, ...validateStoragePath(relative).split('/')) : root;
 	const stat = async (target: vscode.Uri, type: vscode.FileType) => {
 		const value = await vscode.workspace.fs.stat(target);
 		if (value.type !== type) { throw new Error('Unverified entry type or symbolic link.'); }

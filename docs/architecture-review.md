@@ -309,6 +309,8 @@ licenseNotices[].textは収集/dedupし安全な対象言語commentとして出�
 
 ### Phase 2 — UI/作成/Pack/copy
 
+2026-10-09実装結果は[Phase 2結果](phase2-results.md)。利用者の追加指示でnative Snippets/Packs、単一中央detail panel、明示Insert adapterを採用。Pack内は一UUIDにつき一version、異なるPack/library全体には複数versionを許容する。保存はPack単位、外部変更は明示Reload、sourceは通常editor。Phase 3は別承認gate。
+
 - 目標/ファイル: snippetTree/packTree/searchInput/detailsPanel/metadataForm、create/edit/packEditor/copy/delete、resolver、userState、transactions/watcher。
 - テスト: Selection/File/new作成、create/edit同form、Default、recursive closure、delete制約、scope対称copy、multi-select、cancel、Reload/Later、自己write通知抑制。
 - 合格: 保存→検索→詳細→source edit、detail panel1つ、copy原本維持、Pack自己完結、依存を壊す削除不可。

@@ -26,6 +26,8 @@ Ignore rules cover dependencies, build/test/coverage output, private environment
 
 The Phase 0 demo uses synthetic source constants and untitled documents. Test/runtime profiles are isolated under ignored `.vscode-test/`; it does not create Global or Workspace snippet data. Development profiles must not share personal settings, extensions or credentials.
 
+Phase 2 tests create synthetic Pack/Snippet/staging/recovery data only in ignored `.vscode-test/` sandboxes. Native local roots reject links and hardlinks. Production URI writes use private staging rather than in-place source writes; providers without verified write support remain read-only. Runtime assets and relative recovery journals are not implementation fixtures to publish. Nested workspace `.snippets/` directories are ignored and rejected by the public file scan, while deliberate `src/test/fixtures/` remain publishable. Webview text and candidate labels are escaped/text-only, with a media-only resource root, CSP, nonce and validated session messages.
+
 If a possible historical secret is found, stop publishing and report its location/category. Do not repeat the value in a report, rewrite history or force-push without user direction. Secret rotation and history cleanup require a separate decision.
 
 At the start of Phase 0, both existing commits and the tracked working tree were inspected; no personal absolute paths or credential values were found. The portable IDE configurations use workspace variables. No tracked private file needed removal. Generated test/runtime files remain ignored.

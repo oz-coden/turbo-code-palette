@@ -6,12 +6,13 @@ import { pathCollisionKey, validateRelativePath } from './safePaths';
 import type { StorageRoot } from './roots';
 import { nativeReader, type LibraryReader, type ReaderFactory } from './reader';
 
-export interface LoadDiagnostic { readonly scope: StorageRoot['scope']; readonly asset: string; readonly code: string }
+export interface LoadDiagnostic { readonly scope: StorageRoot['scope']; readonly rootKey: string; readonly asset: string; readonly code: string }
 export interface AssetLocation {
 	readonly root: StorageRoot;
 	readonly relativePath: string;
 	readonly metadata: MetadataView;
 	readonly files: readonly FingerprintFile[];
+	readonly directories?: readonly string[];
 	readonly semanticHash?: string;
 	readonly integrityHash?: string;
 	readonly packName: string;
@@ -33,7 +34,7 @@ const missing = (error: unknown): boolean => ['ENOENT', 'FileNotFound'].includes
 export async function loadCatalog(roots: readonly StorageRoot[], readerFactory: ReaderFactory = nativeReader): Promise<CatalogSnapshot> {
 	const snippets: AssetLocation[] = [], packs: AssetLocation[] = [], diagnostics: LoadDiagnostic[] = [];
 	for (const root of roots) {
-		const report = (asset: string, code: string) => diagnostics.push({ scope: root.scope, asset, code });
+		const report = (asset: string, code: string) => diagnostics.push({ scope: root.scope, rootKey: root.uri ?? root.path, asset, code });
 		let entries, reader: LibraryReader;
 		try { reader = readerFactory(root); entries = await reader.list(''); }
 		catch (error) { if (!missing(error)) { report('', 'unreadable-root'); } continue; }
@@ -49,7 +50,7 @@ export async function loadCatalog(roots: readonly StorageRoot[], readerFactory: 
 				if (rootNames.get(key)! > 1) { report(packPath, 'path-collision'); continue; }
 				if (!entry.directory) { continue; }
 				if (!(await reader.list(packPath)).some(child => child.name === 'pack.json' && !child.directory)) { continue; }
-				const files: FileRecord[] = [], errors: string[] = [], names = new Map<string, string>();
+				const files: FileRecord[] = [], directories: string[] = [], errors: string[] = [], names = new Map<string, string>();
 				let bytes = 0, count = 0;
 				const walk = async (prefix: string, depth: number): Promise<void> => {
 					if (depth > 64) { throw new Error('Tree depth limit.'); }
@@ -60,7 +61,7 @@ export async function loadCatalog(roots: readonly StorageRoot[], readerFactory: 
 							validateRelativePath(relative);
 							const key = pathCollisionKey(relative);
 							if (names.has(key)) { errors.push(names.get(key)!); throw new Error('Path collision.'); } names.set(key, relative);
-							if (child.directory) { await walk(relative + '/', depth + 1); }
+							if (child.directory) { directories.push(relative); await walk(relative + '/', depth + 1); }
 							else {
 								const data = await reader.read(packPath + '/' + relative, child.name === 'pack.json' || child.name === 'snippet.json' ? 1024 * 1024 : 16 * 1024 * 1024);
 								bytes += data.length;
@@ -109,8 +110,10 @@ export async function loadCatalog(roots: readonly StorageRoot[], readerFactory: 
 								}
 							});
 						}
-						members.push(Object.freeze({ root, relativePath: packPath + '/' + directory, metadata: view, files: memberFiles,
-							packName, integrityHash: treeFingerprint(memberFiles, false), semanticHash: treeFingerprint(memberFiles, true),
+						const memberDirectories = directories.filter(name => name.startsWith(prefix)).map(name => name.slice(prefix.length)).sort();
+						const fingerprintFiles = [...memberFiles, ...memberDirectories.map(name => ({ path: name + '/', hash: sha256('directory') }))];
+						members.push(Object.freeze({ root, relativePath: packPath + '/' + directory, metadata: view, files: memberFiles, directories: memberDirectories,
+							packName, integrityHash: treeFingerprint(fingerprintFiles, false), semanticHash: treeFingerprint(fingerprintFiles, true),
 							usable: reader.verifiedFileIdentity && view.canInsert && packMetadata.document.format !== 'future' }));
 					} catch { incomplete = true; report(packPath + '/' + directory, 'invalid-snippet'); }
 				}
@@ -119,10 +122,11 @@ export async function loadCatalog(roots: readonly StorageRoot[], readerFactory: 
 				if (duplicate) { report(packPath, 'duplicate-snippet-uuid'); }
 				snippets.push(...members.map(member => duplicate ? Object.freeze({ ...member, usable: false }) : member));
 				const packFiles = files.map(file => ({ path: file.path, hash: file.hash, metadata: recognized.get(file.path) }));
+				const fingerprintFiles = [...packFiles, ...directories.map(name => ({ path: name + '/', hash: sha256('directory') }))];
 				const validTree = !incomplete && [...recognized.values()].every(document => document.format !== 'invalid');
-				packs.push(Object.freeze({ root, relativePath: packPath, metadata: packMetadata, files: packFiles, packName,
-					integrityHash: validTree ? treeFingerprint(packFiles, false) : undefined,
-					semanticHash: validTree ? treeFingerprint(packFiles, true) : undefined,
+				packs.push(Object.freeze({ root, relativePath: packPath, metadata: packMetadata, files: packFiles, directories: directories.sort(), packName,
+					integrityHash: validTree ? treeFingerprint(fingerprintFiles, false) : undefined,
+					semanticHash: validTree ? treeFingerprint(fingerprintFiles, true) : undefined,
 					usable: reader.verifiedFileIdentity && validTree && !duplicate && packMetadata.canEdit }));
 			} catch { report(packPath, 'invalid-pack'); }
 		}
