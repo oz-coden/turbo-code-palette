@@ -1,9 +1,7 @@
 # Change Log
 
-All notable changes to the "turbo-code-palette" extension will be documented in this file.
-
-Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
-
 ## [Unreleased]
 
-- Initial release
+- Preserve the generated VS Code TypeScript extension scaffold.
+- Document the v1 specification, API feasibility review, architecture, security requirements, and phased implementation plan.
+- Product implementation is pending architecture review acceptance.

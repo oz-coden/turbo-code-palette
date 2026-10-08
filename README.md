@@ -1,71 +1,42 @@
-# turbo-code-palette README
+# Turbo Code Palette
 
-This is the README for your extension "turbo-code-palette". After writing up a brief description, we recommend including the following sections.
+VS Codeで再利用可能なコードを探し、ドラッグまたはInsertで挿入するための拡張です。SnippetをGlobal/Workspaceで管理し、自己完結したPackとして配布する構想です。
 
-## Features
+**現在は実装前レビュー段階です。** 実行可能なコードはVS Code生成ひな形のHello Worldのみで、Snippet管理等の製品機能はまだ実装されていません。
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+- [v1仕様書](docs/product-spec.md)
+- [設計・API・セキュリティ監査と段階的な実装計画](docs/architecture-review.md)
+- [GitHubリポジトリ](https://github.com/oz-coden/turbo-code-palette)
 
-For example if there is an image subfolder under your extension project workspace:
+仕様書は最初に監査を行い、レビュー承認後に段階的な実装へ進むよう指定しています。監査の判定は **GO WITH NOTES** です。D&Dの最小試作、Pack依存の適用範囲、C# providerのruntimeを確認してから実装します。
 
-\!\[feature X\]\(images/feature-x.png\)
+## 開発
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+Node.js/npmを使います。現在のVS Code engineは`^1.134.0`です。
 
-## Requirements
+```sh
+npm ci
+npm run compile
+npm run compile-tests
+```
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+`compile`は型チェック、lint、esbuildを実行します。VS Codeでこのfolderを開いてF5を押すとExtension Development Hostを起動できます。
 
-## Extension Settings
+```sh
+npm test
+npm run package
+```
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+`test`はVS Codeのテスト用runtimeを取得し、GUIのExtension Hostを起動する場合があります。現在のテストは生成ひな形のサンプルのみです。`package`は配布用JavaScript bundleのビルドで、VSIX生成やMarketplace公開は行いません。
 
-For example:
+## 実装予定
 
-This extension contributes the following settings:
+1. 開発・テスト基盤とnative sidebarからeditorへのD&D検証
+2. open metadata、storage、identity/version、検索
+3. Snippet/Packの一覧・詳細・作成・編集・コピー
+4. 依存解決、template variables、挿入
+5. 安全な`.tcp-sp` ZIP import/exportとconflict処理
+6. 基本Clean Copy、C# providerとDependency Bundle
+7. Git convenience、操作性、配布検証
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
-
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+詳細なacceptance criteriaと延期機能は設計レビューを参照してください。製品としてGitの自動pull/pushや挿入後コードの同期は行わない方針です。
