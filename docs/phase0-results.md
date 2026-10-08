@@ -6,6 +6,8 @@
 
 **Phase 0のacceptance criteriaを満たした。native TreeView → editor D&Dは実現可能。**
 
+技術的実証の承認後、主操作の発見性を追加調査した。[D&D UX比較報告](dnd-ux-investigation.md)を参照。以下は最初の実証記録であり、Shift-required操作を製品UXとして確定したという意味ではない。
+
 実操作の手順は次の順序になる。
 
 1. Snippet行を左クリックで掴む。

@@ -5,17 +5,23 @@ import { planDemoInsertion, type DemoSnippet } from './core/insertion/plan';
 import { demoSnippets, dropTargetText } from './phase0/fixtures';
 import { SnippetTree } from './ui/snippetTree';
 import { DROP_KIND, SnippetDropProvider } from './ui/dropProvider';
+import { LAB_KIND, LAB_MIME, UxLab } from './phase0/uxLab';
 
 export interface Phase0Api {
 	readonly tree: SnippetTree;
 	readonly dropProvider: SnippetDropProvider;
 	readonly sessions: DragSessions;
+	readonly uxLab: UxLab;
 }
 
 export function activate(context: vscode.ExtensionContext): Phase0Api {
 	const sessions = new DragSessions(randomUUID);
 	const tree = new SnippetTree(demoSnippets, sessions);
 	const dropProvider = new SnippetDropProvider(sessions);
+	const uxLab = new UxLab(context);
+	const labTree = vscode.window.createTreeView('turbo-code-palette.uxNative', {
+		treeDataProvider: uxLab, dragAndDropController: uxLab,
+	});
 	const view = vscode.window.createTreeView('turbo-code-palette.snippets', {
 		treeDataProvider: tree, dragAndDropController: tree, canSelectMany: true,
 	});
@@ -31,7 +37,16 @@ export function activate(context: vscode.ExtensionContext): Phase0Api {
 	const rememberEditor = vscode.window.onDidChangeActiveTextEditor(remember);
 	const rememberSelection = vscode.window.onDidChangeTextEditorSelection(event => remember(event.textEditor));
 
-	context.subscriptions.push(view, output, rememberEditor, rememberSelection,
+	context.subscriptions.push(view, labTree, uxLab, output, rememberEditor, rememberSelection,
+		vscode.window.registerWebviewViewProvider('turbo-code-palette.uxCards', uxLab),
+		vscode.languages.registerDocumentDropEditProvider([{ scheme: 'file' }, { scheme: 'untitled' }], uxLab,
+			{ dropMimeTypes: [LAB_MIME, URI_LIST_MIME, 'text/plain'], providedDropEditKinds: [LAB_KIND] }),
+		vscode.commands.registerCommand('turbo-code-palette.openUxLab', () => uxLab.open()),
+		vscode.commands.registerCommand('turbo-code-palette.showUxLabDiagnostics', () => {
+			output.appendLine(JSON.stringify(uxLab.diagnostics));
+			output.show(true);
+			return uxLab.diagnostics;
+		}),
 		{ dispose: () => sessions.clear() },
 		vscode.workspace.registerTextDocumentContentProvider(DRAG_SCHEME, {
 			provideTextDocumentContent: uri => sessions.resolve(uri.toString())?.text ?? 'This demo preview has expired. Drag the snippet again.',
@@ -71,5 +86,5 @@ export function activate(context: vscode.ExtensionContext): Phase0Api {
 			return { tree: tree.diagnostics, drop: dropProvider.diagnostics };
 		}),
 	);
-	return { tree, dropProvider, sessions };
+	return { tree, dropProvider, sessions, uxLab };
 }

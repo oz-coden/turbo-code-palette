@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Add an opt-in Phase 0 D&D UX lab for native payload and Webview card comparisons, with a public API investigation and an explicit Insert recommendation.
 - Add the Phase 0 native TreeView and cursor/EOF editor drop prototype with explicit Insert and virtual previews.
 - Add isolated Extension Host tests, unit tests, CI, and public repository checks.
 - Confirm native drop and one-step Undo; hold Shift after dragging into the editor and before releasing.

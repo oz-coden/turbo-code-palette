@@ -293,6 +293,8 @@ licenseNotices[].textは収集/dedupし安全な対象言語commentとして出�
 
 ### Phase 0 — scaffoldとD&D実証
 
+技術実証後のUX採用判断は[D&D UX追加調査](dnd-ux-investigation.md)を参照。Shift-required D&Dを唯一の主操作に固定せず、明示Insertを主操作とする案を検討中。Phase 1は未着手。
+
 - 目標/ファイル: package、extension lifecycle、最小TreeView/dropProvider、unit runner、integration fixture、CI。
 - テスト: type/lint/build、activation、通常/Shift drop、位置、空insertText+additionalEdit、Undo、cancel、別document、drop無効設定。
 - 合格: 独自URIが届き1回だけ指定位置へ挿入。未選択/取消しでdocument不変。F5/CI手順を文書化。

@@ -16,6 +16,14 @@
   "contributes": {
     "commands": [
       {
+        "command": "turbo-code-palette.openUxLab",
+        "title": "Turbo Code Palette: Open D&D UX Lab (Research)"
+      },
+      {
+        "command": "turbo-code-palette.showUxLabDiagnostics",
+        "title": "Turbo Code Palette: Show D&D UX Lab Diagnostics"
+      },
+      {
         "command": "turbo-code-palette.openDropTarget",
         "title": "Turbo Code Palette: Open Phase 0 Drop Target"
       },
@@ -36,7 +44,11 @@
       "activitybar": [{ "id": "turbo-code-palette", "title": "Turbo Code Palette", "icon": "media/palette.svg" }]
     },
     "views": {
-      "turbo-code-palette": [{ "id": "turbo-code-palette.snippets", "name": "Snippets (Phase 0)" }]
+      "turbo-code-palette": [
+        { "id": "turbo-code-palette.snippets", "name": "Snippets (Phase 0)" },
+        { "id": "turbo-code-palette.uxNative", "name": "UX Lab Native", "when": "tcp.uxLab" },
+        { "id": "turbo-code-palette.uxCards", "name": "UX Lab Cards", "type": "webview", "when": "tcp.uxLab" }
+      ]
     },
     "menus": {
       "view/title": [{ "command": "turbo-code-palette.openDropTarget", "when": "view == turbo-code-palette.snippets", "group": "navigation" }],
@@ -59,6 +71,8 @@
     "test:unit": "npm run compile-tests && node --test out/test/unit/*.test.js scripts/public-repo-rules.test.mjs",
     "test:host": "npm run compile-tests && npm run compile && node scripts/run-host-tests.mjs",
     "dev:host": "npm run compile && node scripts/launch-dev-host.mjs",
+    "dev:ux": "npm run compile && node scripts/launch-dev-host.mjs --ux-lab",
+    "dev:ux:min": "npm run compile && node scripts/launch-dev-host.mjs --ux-lab --minimum",
     "check-public": "node scripts/check-public-repo.mjs"
   },
   "devDependencies": {
