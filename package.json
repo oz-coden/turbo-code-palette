@@ -55,7 +55,8 @@
       { "command": "turbo-code-palette.delete", "title": "Turbo Code Palette: Delete", "icon": "$(trash)" },
       { "command": "turbo-code-palette.favorite", "title": "Turbo Code Palette: Toggle Favorite", "icon": "$(star-empty)" },
       { "command": "turbo-code-palette.filter", "title": "Turbo Code Palette: All / Favorites / Recent", "icon": "$(filter)" },
-      { "command": "turbo-code-palette.insert", "title": "Turbo Code Palette: Insert Snippet", "icon": "$(arrow-right)" },
+      { "command": "turbo-code-palette.insert", "title": "Turbo Code Palette: Insert Snippet", "shortTitle": "Default Mode", "icon": "$(arrow-right)" },
+      { "command": "turbo-code-palette.insertWithMode", "title": "Turbo Code Palette: Insert Snippet with Mode…", "shortTitle": "Choose Mode…" },
       { "command": "turbo-code-palette.upgrade", "title": "Turbo Code Palette: Upgrade Metadata Format" },
       { "command": "turbo-code-palette.openGlobalFolder", "title": "Turbo Code Palette: Open Global Library Folder" },
       { "command": "turbo-code-palette.revealGlobalFolder", "title": "Turbo Code Palette: Reveal Global Library" },
@@ -85,7 +86,12 @@
         }
       ]
     },
+    "submenus": [{ "id": "tcp.insertMenu", "label": "Insert" }],
     "menus": {
+      "tcp.insertMenu": [
+        { "command": "turbo-code-palette.insert", "group": "1_insert@1" },
+        { "command": "turbo-code-palette.insertWithMode", "group": "1_insert@2" }
+      ],
       "view/title": [
         {
           "command": "turbo-code-palette.openDropTarget",
@@ -114,7 +120,7 @@
           "group": "1_insert"
         },
         { "command": "turbo-code-palette.insert", "when": "viewItem == tcp.snippet", "group": "inline@1" },
-        { "command": "turbo-code-palette.insert", "when": "viewItem == tcp.snippet", "group": "1_insert" },
+        { "submenu": "tcp.insertMenu", "when": "viewItem == tcp.snippet", "group": "1_insert" },
         { "command": "turbo-code-palette.edit", "when": "viewItem == tcp.snippet || viewItem == tcp.pack", "group": "2_edit@1" },
         { "command": "turbo-code-palette.favorite", "when": "viewItem == tcp.snippet || viewItem == tcp.pack", "group": "2_edit@2" },
         { "command": "turbo-code-palette.copyWorkspace", "when": "(viewItem == tcp.snippet || viewItem == tcp.pack) && tcp.hasWorkspace", "group": "3_copy@1" },
@@ -137,12 +143,12 @@
         },
         "turboCodePalette.showDevelopmentDemos": {
           "type": "boolean", "default": false,
-          "description": "Show Phase 0 demonstration snippets (reload window required). Real Snippet insertion connects in Phase 3."
+          "description": "Show historical Phase 0 text demonstration commands (reload window required). Product Snippets use the shared insertion pipeline."
         },
-        "turboCodePalette.enableAuxiliaryDragAndDrop": {
+        "turboCodePalette.previewBeforeInsert": {
           "type": "boolean",
           "default": false,
-          "description": "Enable optional native demo drag and drop (reload window required). Move over the editor, hold Shift, then release the mouse. Use Insert for the primary workflow. This feature may be removed if it conflicts with VS Code or other drop actions."
+          "description": "Preview the complete insertion plan before applying. Cancelling changes no target or output files. Native drag and drop is retired; use Insert."
         }
       }
     },

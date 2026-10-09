@@ -44,6 +44,7 @@ tmp/
 !src/test/fixtures/**/*.tcp-sp
 .tcp-staging/
 .tcp-transactions/
+.tcp-insert-*/
 
 # Repository development must not publish personal snippet storage.
 # Deliberate test fixtures live under src/test/fixtures instead.

@@ -57,12 +57,13 @@ suite('Phase 2 — native library UI and transactional forms in a real Extension
 	});
 	test('all real Insert entry points share the adapter and leave target text/usage unchanged in Phase 2', async () => {
 		const asset = api.catalog.snapshot!.snippets[0], key = locationKey(asset); const editor = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument({ content: 'target\n' })); editor.selection = new vscode.Selection(0, 3, 0, 3);
+		const originalHandler = api.product.insertion.handler;
 		const requests: string[] = []; api.product.insertion.handler = async request => { requests.push(locationKey(request.asset)); assert.equal(request.target?.uri.toString(), editor.document.uri.toString()); assert.equal(request.target?.selection.active.character, 3); };
 		try { await vscode.commands.executeCommand('turbo-code-palette.insert', key); await api.product.showDetails(api.catalog.snapshot!.packs[0]); await api.product.panel.accept({ token: api.product.panel.session, action: 'insert', key }); assert.deepEqual(requests, [key, key]); assert.equal(editor.document.getText(), 'target\n'); assert.equal(api.product.state.get(`snippet:${asset.metadata.id}:${asset.metadata.version!.text}`).usage, 0); }
-		finally { api.product.insertion.handler = undefined; }
+		finally { api.product.insertion.handler = originalHandler; }
 	});
 	test('Pack create/edit form is shared and dependency preview/Save use the common resolver', async () => {
-		await api.product.create('pack'); assert.equal(api.product.panel.current?.seed?.kind, 'pack'); const member = api.catalog.snapshot!.snippets[0];
+		await api.product.create('pack', api.catalog.snapshot!.snippets[0].root); assert.equal(api.product.panel.current?.seed?.kind, 'pack'); const member = api.catalog.snapshot!.snippets[0];
 		await api.product.panel.accept({ token: api.product.panel.session, action: 'save', fields: { name: 'Host Pack', version: 'v1.0.0' }, members: [locationKey(member)] });
 		const pack = api.catalog.snapshot!.packs.find(item => item.metadata.name === 'Host Pack')!; assert.equal(api.product.library.members(pack).length, 1); await api.product.edit(pack); assert.match(api.product.panel.instance!.webview.html, /data-kind="pack"/); assert.match(api.product.panel.instance!.webview.html, /id="member-query"/);
 		await api.product.panel.accept({ token: api.product.panel.session, action: 'cancel' });

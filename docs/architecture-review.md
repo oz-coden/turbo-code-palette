@@ -318,6 +318,8 @@ licenseNotices[].textは収集/dedupし安全な対象言語commentとして出�
 
 ### Phase 3 — insertion/dependencies/templates
 
+2026-10-09、共通adapterへ唯一のpipelineを接続した。[Phase 3結果](phase3-results.md)を参照。generic structure-awareはplaintextの明示file targetのみ。separate-filesは新規folderのatomic publishで、editor Undo外。混在editor/file planは拒否する。D&Dはruntimeから除去し、Phase 0の実証testsのみ保持した。Phase 4は別承認gate。
+
 - 目標/ファイル: insertion/template/dependency graph、genericProvider、commands/dropProvider。
 - テスト: mode precedence、SCC/topology、diamond/backtracking、name warning、適合なし、全source input1回、required/cancel/literal replacement、stale/overlap、separate-files非上書き。
 - 合格: 一覧button/右クリック/command/Pack詳細の明示Insertは同plan。補助dropを残す場合も同planへ接続する。通常は余分なpromptなし。不正planで部分code/file変更なし。D&Dなしで主要機能が成立する。

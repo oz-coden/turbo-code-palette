@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import { randomUUID } from 'node:crypto';
-import { DRAG_SCHEME, DragSessions, URI_LIST_MIME } from './core/insertion/dragSessions';
+import { DRAG_SCHEME, DragSessions } from './core/insertion/dragSessions';
 import { planDemoInsertion, type DemoSnippet } from './core/insertion/plan';
 import { demoSnippets, dropTargetText } from './phase0/fixtures';
 import { SnippetTree } from './ui/snippetTree';
-import { DROP_KIND, SnippetDropProvider } from './ui/dropProvider';
+import { SnippetDropProvider } from './ui/dropProvider';
 import { Catalog } from './storage/catalog';
 import { LibraryController } from './application/controller';
 
@@ -22,9 +22,8 @@ export function activate(context: vscode.ExtensionContext): Phase0Api {
 	const dropProvider = new SnippetDropProvider(sessions);
 	const product = new LibraryController(context);
 	const catalog = product.library.catalog;
-	const enableDrag = vscode.workspace.getConfiguration('turboCodePalette').get<boolean>('enableAuxiliaryDragAndDrop', false);
 	const view = vscode.window.createTreeView('turbo-code-palette.demos', {
-		treeDataProvider: tree, dragAndDropController: enableDrag ? tree : undefined, canSelectMany: true,
+		treeDataProvider: tree, canSelectMany: true,
 	});
 	view.message = 'Choose a position in the editor, select a demo snippet, then use Insert.';
 	void vscode.commands.executeCommand('setContext', 'tcp.showDemos', vscode.workspace.getConfiguration('turboCodePalette').get<boolean>('showDevelopmentDemos', false));
@@ -39,10 +38,7 @@ export function activate(context: vscode.ExtensionContext): Phase0Api {
 	const rememberEditor = vscode.window.onDidChangeActiveTextEditor(remember);
 	const rememberSelection = vscode.window.onDidChangeTextEditorSelection(event => remember(event.textEditor));
 
-	if (enableDrag) {
-		context.subscriptions.push(vscode.languages.registerDocumentDropEditProvider([{ scheme: 'file' }, { scheme: 'untitled' }], dropProvider,
-			{ dropMimeTypes: [URI_LIST_MIME], providedDropEditKinds: [DROP_KIND] }));
-	}
+	// Phase 0 D&D code remains as a historical test fixture; no provider or drag controller is registered.
 	context.subscriptions.push(product, view, output, rememberEditor, rememberSelection,
 		{ dispose: () => sessions.clear() },
 		vscode.workspace.registerTextDocumentContentProvider(DRAG_SCHEME, {

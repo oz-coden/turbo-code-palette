@@ -30,4 +30,6 @@ Phase 2 tests create synthetic Pack/Snippet/staging/recovery data only in ignore
 
 If a possible historical secret is found, stop publishing and report its location/category. Do not repeat the value in a report, rewrite history or force-push without user direction. Secret rotation and history cleanup require a separate decision.
 
+Phase 3 insertion tests use native workspaces and output directories only below ignored `.vscode-test/`. The repository ignores/rejects `.tcp-insert-*` private staging directories. Runtime separate-files uses a new owned staging folder and exclusive files, verifies the tree, then publishes a new folder without overwriting existing content. It never deletes the destination on failure. Editor targets and insertion sources retain native identity checks; unverifiable URI libraries remain ineligible. No source markers, persisted code/provenance database, scripts, raw D&D payload or private workbench API is added.
+
 At the start of Phase 0, both existing commits and the tracked working tree were inspected; no personal absolute paths or credential values were found. The portable IDE configurations use workspace variables. No tracked private file needed removal. Generated test/runtime files remain ignored.

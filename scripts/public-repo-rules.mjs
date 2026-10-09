@@ -26,6 +26,7 @@ export function forbiddenPublicFile(file) {
   if (/^src\/test\/fixtures\/.*\.tcp-sp$/.test(normalized)) { return false; }
   if (/(?:^|\/)(?:node_modules|dist|out|coverage|\.nyc_output|\.vscode-test|test-results|playwright-report|\.idea|\.agents|\.codex|\.aws|\.tcp-staging|\.tcp-transactions)(?:\/|$)/i.test(normalized)) { return true; }
   if (/^csharp\/.*\/(?:bin|obj)\//i.test(normalized)) { return true; }
+  if (/(?:^|\/)\.tcp-insert-[^/]+(?:\/|$)/i.test(normalized)) { return true; }
   if (/(?:^|\/)\.snippets\//i.test(normalized) && !/^src\/test\/fixtures\//.test(normalized)) { return true; }
   if (/^\.tcp-global\//i.test(normalized)) { return true; }
   if (/(?:^|\/)(?:\.env(?:\..*)?|\.npmrc|\.DS_Store|Thumbs\.db|Desktop\.ini)$/i.test(normalized)

@@ -18,10 +18,10 @@ pipelineの責務と段階:
 
 template、dependency、conflict、preview、insert mode、stale target validationは明示Insertを中心に設計する。D&D非対応/無効の環境でもこれらの主要機能を提供する。特にreplace-selectionは明示Insertのcapture済みselectionを使う。
 
-native Shift-required D&Dは補助機能。Phase 1のdemoでは`turboCodePalette.enableAuxiliaryDragAndDrop`を既定falseにし、reload後にのみ登録する。利用する場合は左ボタンで掴む→editorへ移動→Shift保持→左ボタンを離す。Shift+click/右クリックという説明は使わない。VS Codeのdrop設定は自動変更しない。
+native Shift-required D&DはPhase 0/1で補助機能として実証した。Phase 3ではその維持/専用処理を製品へ持ち込まず、runtimeのdrag/drop登録と設定を除去した。歴史的なprovider直接呼出しtestsは残す。製品の全主要操作はD&Dなしで成立する。VS Codeのdrop設定は自動変更しない。
 
 今後D&Dに改修が必要なら廃止を検討してよい。未知の競合D&D actionやVS Codeとの干渉が起きた場合は積極的に廃止する。互換性維持のために主操作を複雑化しない。Webview D&D、raw text fallback、非公開API、内部workbench挙動に依存して通常dropを成立させようとしない。将来の競合を検出するための非公開APIによる監視は追加しない。
 
 実験用UX LabはPhase 1でruntime/sourceから除去。比較結果は[D&D UX調査](dnd-ux-investigation.md)に保存し、PoC当時のsourceはGitの`2df07c1`で参照できる。
 
-Phase 1の実挿入は合成demoのみ。Phase 2では実Snippet一覧button・右クリック・command・Pack詳細buttonを共通`InsertionAdapter`へ接続した。handler未接続の現在は案内のみで、本文/file/usageを変更しない。完成pipelineはPhase 3の責務。合成demoは製品viewから分離し、既定非表示とした。[Phase 2結果](phase2-results.md)を参照。Phase 2完了後は報告して停止し、Phase 3へ自動で進まない。
+Phase 1の実挿入は合成demoのみ。Phase 2で共通`InsertionAdapter`へ入口を接続し、Phase 3で唯一の`InsertionPipeline` handlerを実装した。右クリックのInsert with Modeも同じpipeline。cancel/preview/stale/conflictでeditor/output/usageを変更しない。[Phase 3結果](phase3-results.md)にmode/provider、Undo、file apply、既存実装検証の限界を記録する。合成demoは歴史的な実証commandとして既定非表示の別viewへ隔離。Phase 4へは承認なしで進まない。

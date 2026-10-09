@@ -57,10 +57,10 @@ suite('Phase 1 — catalog commands and explicit Insert in a real Extension Host
 			assert.equal(summary.diagnostics.some(item => item.code === 'unreadable-root'), false);
 		} finally { await config.update('globalRoot', previous, vscode.ConfigurationTarget.Global); }
 	});
-	test('research Webview/custom/raw drop commands are no longer registered; auxiliary D&D defaults off', async () => {
+	test('research drop commands and auxiliary D&D setting are retired from the runtime', async () => {
 		const commands = await vscode.commands.getCommands();
 		assert.equal(commands.includes('turbo-code-palette.openUxLab'), false);
 		assert.equal(commands.includes('turbo-code-palette.showUxLabDiagnostics'), false);
-		assert.equal(vscode.workspace.getConfiguration('turboCodePalette').inspect<boolean>('enableAuxiliaryDragAndDrop')?.defaultValue, false);
+		assert.equal(vscode.workspace.getConfiguration('turboCodePalette').inspect<boolean>('enableAuxiliaryDragAndDrop')?.defaultValue, undefined);
 	});
 });

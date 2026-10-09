@@ -8,7 +8,7 @@ const supported = (asset: AssetLocation) => asset.metadata.valid && ['legacy', '
 
 /** Pack construction resolver: one revision per UUID, with backtracking for intersecting ranges. */
 export function resolveClosure(roots: readonly AssetLocation[], candidates: readonly AssetLocation[],
-	options: { workspaceId?: string; forbidden?: ReadonlySet<string>; signal?: AbortSignal; maxNodes?: number } = {}): Closure {
+	options: { workspaceId?: string; forbidden?: ReadonlySet<string>; signal?: AbortSignal; maxNodes?: number; strictConflicts?: boolean } = {}): Closure {
 	if (roots.length > 256 || candidates.length > 20000) { throw new Error('Dependency candidate limit exceeded.'); }
 	const fixed = new Map<string, AssetLocation>();
 	for (const asset of roots) {
@@ -50,6 +50,7 @@ export function resolveClosure(roots: readonly AssetLocation[], candidates: read
 		const implementations = new Map<string, Set<string>>();
 		for (const asset of suitable) { const revision = asset.metadata.version!.text, hashes = implementations.get(revision) ?? new Set<string>(); hashes.add(asset.semanticHash!); implementations.set(revision, hashes); }
 		const conflicts = new Set([...implementations].filter(([, hashes]) => hashes.size > 1).map(([version]) => version));
+		if (options.strictConflicts && conflicts.size) { throw new Error('Conflicting dependency implementations. Compare/select before insertion; automatic substitution is disabled.'); }
 		const seen = new Set<string>();
 		for (const asset of suitable) {
 			if (conflicts.has(asset.metadata.version!.text) || seen.has(asset.metadata.version!.text)) { continue; }

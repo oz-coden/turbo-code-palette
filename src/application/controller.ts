@@ -4,6 +4,7 @@ import { Library, locationKey, packOf, sameRoot, type DependencyRow, type Metada
 import { UserState } from './userState';
 import { ChangeTracker } from './changes';
 import { InsertionAdapter } from './insertionAdapter';
+import { InsertionPipeline } from './insertionPipeline';
 import { AssetTree, type AssetRow } from '../ui/assetTree';
 import { DetailsPanel, type FormSeed } from '../ui/detailsPanel';
 import { nativeStore } from '../storage/store';
@@ -32,6 +33,7 @@ export class LibraryController implements vscode.Disposable {
 	readonly packView: vscode.TreeView<AssetRow>;
 	readonly panel: DetailsPanel;
 	readonly insertion = new InsertionAdapter();
+	readonly pipeline: InsertionPipeline;
 	readonly changes: ChangeTracker;
 	private readonly subscriptions: vscode.Disposable[] = [];
 	private watchers: vscode.Disposable[] = [];
@@ -62,6 +64,8 @@ export class LibraryController implements vscode.Disposable {
 			}
 		});
 		this.state = new UserState(context.globalState); this.snippets = new AssetTree(this.library.catalog, 'snippet', this.state); this.packs = new AssetTree(this.library.catalog, 'pack', this.state);
+		this.pipeline = new InsertionPipeline(this.library, this.state, () => { if (this.rootsDirty || this.busy) { throw new Error('Library is changing. Finish the save / Reload before Insert.'); } });
+		this.insertion.handler = async request => { const result = await this.pipeline.run(request); if (result === 'already-present') { void vscode.window.showInformationMessage('This Snippet and its dependencies are already present in the verified editor state.'); } this.refresh(); };
 		this.snippetView = vscode.window.createTreeView(prefix + 'snippets', { treeDataProvider: this.snippets, canSelectMany: true });
 		this.packView = vscode.window.createTreeView(prefix + 'packs', { treeDataProvider: this.packs, canSelectMany: true });
 		this.panel = new DetailsPanel(context.extensionUri, message => this.message(message));
@@ -72,7 +76,7 @@ export class LibraryController implements vscode.Disposable {
 			const choice = await vscode.window.showInformationMessage('Turbo Code Palette: library changed externally. Reload to update the loaded library.', 'Reload', 'Later');
 			if (choice === 'Reload') { try { await this.reload(); } catch (error) { void vscode.window.showErrorMessage(error instanceof Error ? error.message : 'Reload failed.'); } }
 		}, pending => { this.snippetView.badge = pending ? { value: 1, tooltip: 'External changes pending — Reload library' } : undefined; this.packView.badge = this.snippetView.badge; });
-		this.subscriptions.push(this.snippets, this.packs, this.snippetView, this.packView, this.panel, this.insertion, this.changes);
+		this.subscriptions.push(this.snippets, this.packs, this.snippetView, this.packView, this.panel, this.insertion, this.pipeline, this.changes);
 		const register = (name: string, callback: (...args: unknown[]) => Promise<unknown>) => this.subscriptions.push(vscode.commands.registerCommand(prefix + name, (...args: unknown[]) => callback(...args).catch(error => {
 			void vscode.window.showErrorMessage(error instanceof Error ? error.message : 'Operation failed.');
 		})));
@@ -96,7 +100,9 @@ export class LibraryController implements vscode.Disposable {
 			const choice = await vscode.window.showQuickPick(['All', 'Favorites', 'Recent']); if (!choice) { return; }
 			this.snippets.filter = this.packs.filter = choice === 'All' ? 'all' : choice.toLowerCase() as 'favorites' | 'recent'; this.refresh();
 		});
-		register('insert', async input => { const asset = await this.choose(input, 'snippet'); if (asset) { await this.insertion.request(asset); } });
+		const insert = async (input?: unknown, chooseMode = false) => { const target = this.insertion.capture(); if (!target) { throw new Error('Open a project text editor and select the insertion position first.'); } const asset = await this.choose(input, 'snippet'); if (asset) { await this.insertion.request(asset, chooseMode ? 'choose' : undefined, target); } };
+		register('insert', input => insert(input));
+		register('insertWithMode', input => insert(input, true));
 		register('upgrade', async input => { const asset = await this.choose(input, undefined, true); if (asset) { await this.mutate(() => this.library.upgrade(asset)); await this.showDetails(this.find(locationKey(asset))); } });
 		register('openGlobalFolder', () => this.openGlobal(false)); register('revealGlobalFolder', () => this.openGlobal(true));
 		register('configureGlobalRoot', async () => {
@@ -192,11 +198,12 @@ export class LibraryController implements vscode.Disposable {
 		if (!chosen) { return; } if (chosen === 'Default Pack') { return {}; }
 		const name = await vscode.window.showInputBox({ prompt: 'New Pack name', validateInput: value => value.trim() ? undefined : 'Enter a Pack name.' }); return name === undefined ? undefined : { name: name.trim() };
 	}
-	async create(mode: 'new' | 'selection' | 'file' | 'pack'): Promise<void> {
+	async create(mode: 'new' | 'selection' | 'file' | 'pack', chosenRoot?: StorageRoot): Promise<void> {
 		++this.detailsGeneration;
 		const { bytes, name, sourceName, language } = captureSnippet(mode === 'pack' ? 'new' : mode, vscode.window.activeTextEditor);
 		if (!this.library.catalog.snapshot) { await this.reload(); }
-		const root = await this.target(); if (!root) { return; }
+		if (chosenRoot && !this.roots().some(root => sameRoot(root, chosenRoot))) { throw new Error('Creation target is no longer configured.'); }
+		const root = chosenRoot ?? await this.target(); if (!root) { return; }
 		const destination = mode === 'pack' ? {} : await this.destination(); if (!destination) { return; }
 		const seed: FormSeed = { kind: mode === 'pack' ? 'pack' : 'snippet', name, language, sourceName, members: [], destination: `${root.scope} · ${destination.name ?? (mode === 'pack' ? 'New Pack' : 'Default Pack')}` };
 		if (await this.panel.form(seed)) { this.creation = { root, packName: destination.name, bytes }; }
