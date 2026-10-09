@@ -327,6 +327,8 @@ licenseNotices[].textは収集/dedupし安全な対象言語commentとして出�
 
 ### Phase 4 — ZIP/preview/conflict
 
+2026-10-09、[Phase 4結果](phase4-results.md)のとおり実装。標準Diff、通常ZIP、明示whole-Pack Fork/compatible newer revision Replace、任意markerを追加した。同version content conflictの強制overwrite、mixed editor/file transaction、Clean Copyは実装していない。Phase 5は別承認gate。
+
 - 目標/ファイル: archive、importExport、conflictPicker、security docs。
 - テスト: ZIP roundtrip、preview分類、Zip Slip、case/Unicode/reserved/ADS、symlink、duplicate entry/UUID、bomb/size偽装、JSON/CRC、cancel/write/rename failure、残存journal回復。
 - 合格: 普通のZIP toolで読める。確定前root不変、failureで原本保持。diff/new version/fork/明示replace導線。

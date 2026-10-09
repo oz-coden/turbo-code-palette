@@ -15,6 +15,10 @@ import { containedPath, validateRelativePath, validateStoragePath } from '../sto
 import { searchAssets, modifierSuggestions } from '../core/search/index';
 import { resolveClosure } from '../core/dependency/resolver';
 import { pendingRecovery, recover } from '../storage/recovery';
+import { ComparisonDocuments } from '../ui/comparison';
+import { ConflictError } from '../core/conflict';
+import { PackImportSession, exportPack } from './packArchive';
+import { cloneTree } from '../storage/transaction';
 
 interface Creation { root: StorageRoot; packName?: string; bytes: Buffer }
 export function captureSnippet(mode: 'new' | 'selection' | 'file', editor?: vscode.TextEditor): { bytes: Buffer; name: string; sourceName: string; language: string } {
@@ -34,6 +38,7 @@ export class LibraryController implements vscode.Disposable {
 	readonly panel: DetailsPanel;
 	readonly insertion = new InsertionAdapter();
 	readonly pipeline: InsertionPipeline;
+	readonly comparison = new ComparisonDocuments();
 	readonly changes: ChangeTracker;
 	private readonly subscriptions: vscode.Disposable[] = [];
 	private watchers: vscode.Disposable[] = [];
@@ -64,7 +69,7 @@ export class LibraryController implements vscode.Disposable {
 			}
 		});
 		this.state = new UserState(context.globalState); this.snippets = new AssetTree(this.library.catalog, 'snippet', this.state); this.packs = new AssetTree(this.library.catalog, 'pack', this.state);
-		this.pipeline = new InsertionPipeline(this.library, this.state, () => { if (this.rootsDirty || this.busy) { throw new Error('Library is changing. Finish the save / Reload before Insert.'); } });
+		this.pipeline = new InsertionPipeline(this.library, this.state, () => { if (this.rootsDirty || this.busy) { throw new Error('Library is changing. Finish the save / Reload before Insert.'); } }, undefined, this.comparison);
 		this.insertion.handler = async request => { const result = await this.pipeline.run(request); if (result === 'already-present') { void vscode.window.showInformationMessage('This Snippet and its dependencies are already present in the verified editor state.'); } this.refresh(); };
 		this.snippetView = vscode.window.createTreeView(prefix + 'snippets', { treeDataProvider: this.snippets, canSelectMany: true });
 		this.packView = vscode.window.createTreeView(prefix + 'packs', { treeDataProvider: this.packs, canSelectMany: true });
@@ -76,9 +81,10 @@ export class LibraryController implements vscode.Disposable {
 			const choice = await vscode.window.showInformationMessage('Turbo Code Palette: library changed externally. Reload to update the loaded library.', 'Reload', 'Later');
 			if (choice === 'Reload') { try { await this.reload(); } catch (error) { void vscode.window.showErrorMessage(error instanceof Error ? error.message : 'Reload failed.'); } }
 		}, pending => { this.snippetView.badge = pending ? { value: 1, tooltip: 'External changes pending — Reload library' } : undefined; this.packView.badge = this.snippetView.badge; });
-		this.subscriptions.push(this.snippets, this.packs, this.snippetView, this.packView, this.panel, this.insertion, this.pipeline, this.changes);
-		const register = (name: string, callback: (...args: unknown[]) => Promise<unknown>) => this.subscriptions.push(vscode.commands.registerCommand(prefix + name, (...args: unknown[]) => callback(...args).catch(error => {
-			void vscode.window.showErrorMessage(error instanceof Error ? error.message : 'Operation failed.');
+		this.subscriptions.push(this.snippets, this.packs, this.snippetView, this.packView, this.panel, this.insertion, this.pipeline, this.changes, this.comparison);
+		const register = (name: string, callback: (...args: unknown[]) => Promise<unknown>) => this.subscriptions.push(vscode.commands.registerCommand(prefix + name, (...args: unknown[]) => callback(...args).catch(async error => {
+			if (error instanceof ConflictError) { try { await this.comparison.conflict(this.library, error); } catch (reviewError) { void vscode.window.showErrorMessage((reviewError as Error).message); } }
+			else { void vscode.window.showErrorMessage(error instanceof Error ? error.message : 'Operation failed.'); }
 		})));
 		register('reloadCatalog', () => this.reload());
 		register('searchCatalog', async query => {
@@ -110,6 +116,9 @@ export class LibraryController implements vscode.Disposable {
 			if (chosen?.[0]) { if (chosen[0].scheme !== 'file') { throw new Error('Choose a local directory on the extension host.'); } await vscode.workspace.getConfiguration('turboCodePalette').update('globalRoot', chosen[0].fsPath, vscode.ConfigurationTarget.Global); }
 		});
 		register('reviewRecovery', () => this.reviewRecovery());
+		register('importPack', () => this.importArchive());
+		register('exportPack', async input => { const asset = await this.choose(input, 'pack', true); if (!asset) { return; } const destination = await vscode.window.showSaveDialog({ filters: { 'TCP Pack': ['tcp-sp'] }, saveLabel: 'Export Pack (new filename)' }); if (!destination) { return; } if (destination.scheme !== 'file') { throw new Error('Export requires a native local destination.'); } for (const root of this.roots().filter(root => !root.uri)) { const relative = path.relative(root.path, destination.fsPath); if (!relative || relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative)) { throw new Error('Export outside library storage to keep the source Pack unchanged.'); } } await exportPack(this.library, asset, destination.fsPath); void vscode.window.showInformationMessage('Pack exported. Existing archives are never overwritten.'); });
+		register('compare', async input => { const asset = await this.choose(input, undefined, true); if (!asset) { return; } const existing = (asset.metadata.kind === 'pack' ? this.library.catalog.snapshot!.packs : this.library.catalog.snapshot!.snippets).filter(other => other !== asset && other.metadata.id === asset.metadata.id); if (!existing.length) { void vscode.window.showInformationMessage('No other loaded revision/location with this UUID.'); return; } await this.comparison.assets(this.library, asset, existing); });
 		const rootsChanged = () => { this.rootsDirty = true; void this.changes.changed().catch(() => {}); };
 		this.subscriptions.push(vscode.workspace.onDidChangeConfiguration(event => { if (event.affectsConfiguration('turboCodePalette.globalRoot')) { rootsChanged(); } }),
 			vscode.workspace.onDidChangeWorkspaceFolders(rootsChanged));
@@ -122,6 +131,27 @@ export class LibraryController implements vscode.Disposable {
 		for (const folder of workspaces.filter(folder => folder.uri.scheme !== 'file')) { const uri = vscode.Uri.joinPath(folder.uri, '.snippets'); roots.unshift({ scope: 'workspace', workspaceId: folder.uri.toString(), path: uri.toString(), uri: uri.toString() }); }
 		if (!config && this.context.globalStorageUri.scheme !== 'file') { const uri = vscode.Uri.joinPath(this.context.globalStorageUri, 'snippets'); roots[roots.length - 1] = { scope: 'global', path: uri.toString(), uri: uri.toString() }; }
 		return roots;
+	}
+	private async importArchive(): Promise<void> {
+		if (this.busy || this.rootsDirty) { throw new Error('Finish library operations / Reload before Import.'); }
+		const archive = (await vscode.window.showOpenDialog({ canSelectFiles: true, canSelectFolders: false, canSelectMany: false, filters: { 'TCP Pack': ['tcp-sp'] }, openLabel: 'Preview Pack Import' }))?.[0]; if (!archive) { return; }
+		if (archive.scheme !== 'file') { throw new Error('Import requires a native local archive.'); } const root = await this.target(); if (!root) { return; }
+		const session = await PackImportSession.prepare(this.library, archive.fsPath, root);
+		try {
+			const uri = this.comparison.snapshot(session.rows.map(row => `${row.category}: ${row.incoming.metadata.kind} · ${row.incoming.metadata.name} · ${row.incoming.metadata.version!.text}${row.existing.length ? '\n  Existing: ' + row.existing.map(asset => asset.metadata.version!.text + ' · ' + asset.root.scope + ' · ' + asset.packName).join(', ') : ''}`).join('\n\n'), 'import-preview.txt');
+			await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri), { preview: true });
+			for (;;) {
+				const conflict = session.rows.some(row => row.category === 'conflict'), replacements = session.replacements();
+				const choices = ['Compare', ...(conflict ? [] : ['Import']), 'Fork whole Pack', ...(conflict || !replacements.length ? [] : ['Replace older Pack'])];
+				const action = await vscode.window.showQuickPick(choices, { title: 'Pack Import preview', placeHolder: 'Review the preview. Escape cancels without changing library storage.' }); if (!action) { return; }
+				if (action === 'Compare') { const row = (await vscode.window.showQuickPick(session.rows.filter(row => row.existing.length).map(row => ({ label: row.incoming.metadata.name!, description: row.category, row })), { title: 'Choose asset comparison' }))?.row; if (row) { const other = row.existing.length === 1 ? row.existing[0] : (await vscode.window.showQuickPick(row.existing.map(asset => ({ label: asset.metadata.name!, description: `${asset.metadata.version!.text} · ${asset.root.scope} · ${asset.packName}`, asset }))))?.asset; if (other) { const prefix = row.incoming.metadata.kind === 'pack' ? '' : row.incoming.relativePath.slice(5) + '/', next = cloneTree(new Map([...session.tree].filter(([name]) => name.startsWith(prefix)).map(([name, bytes]) => [name.slice(prefix.length), bytes]))); for (const directory of session.tree.directories) { if (!prefix || directory.startsWith(prefix)) { next.directories.add(directory.slice(prefix.length)); } } await this.comparison.trees(await this.library.assetTree(other), next); } } continue; }
+				let replacement: AssetLocation | undefined;
+				if (action === 'Replace older Pack') { replacement = (await vscode.window.showQuickPick(replacements.map(asset => ({ label: asset.metadata.name!, description: asset.metadata.version!.text + ' · ' + asset.packName, asset })), { title: 'Explicitly replace this older Pack (atomic library save)' }))?.asset; if (!replacement) { continue; } }
+				if (action === 'Fork whole Pack' && await vscode.window.showWarningMessage('Fork creates new Pack and Snippet UUIDs and remaps known internal dependencies. Versions, source bytes and unknown metadata fields are retained; unknown fields may contain references you must review.', { modal: true }, 'Fork') !== 'Fork') { continue; }
+				if (replacement && await vscode.window.showWarningMessage('Replace the selected older Pack with this validated newer revision? The previous tree is retained for rollback until the atomic save succeeds.', { modal: true }, 'Replace') !== 'Replace') { continue; }
+				const result = await this.mutate(() => session.commit(action === 'Fork whole Pack' ? 'fork' : replacement ? 'replace' : 'add', replacement)); void vscode.window.showInformationMessage(result === 'identical' ? 'Identical Pack already exists; no library changes.' : 'Pack imported.'); return;
+			}
+		} finally { await session.dispose(); }
 	}
 	rootUri(root: StorageRoot): vscode.Uri { return root.uri ? vscode.Uri.parse(root.uri) : vscode.Uri.file(root.path); }
 	assetUri(asset: AssetLocation, relative = ''): vscode.Uri {
@@ -273,7 +303,7 @@ export class LibraryController implements vscode.Disposable {
 		if (action === 'cancel') { this.creation = undefined; const asset = this.panel.current?.asset; if (asset) { await this.showDetails(asset); } else { this.panel.dispose(); } return; }
 		if (action === 'source') { if (typeof message.key !== 'string' || typeof message.source !== 'string') { throw new Error('Invalid source.'); } await this.openSource(this.find(message.key), message.source); return; }
 		if (action === 'rawMetadata') { if (typeof message.key !== 'string') { throw new Error('Invalid item.'); } const asset = this.find(message.key); const filename = asset.metadata.kind + '.json'; await this.library.stores(asset.root).read(asset.relativePath + '/' + filename, 1024 * 1024); await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(this.assetUri(asset, filename)), { preview: false }); return; }
-		if (['details', 'edit', 'favorite', 'copyWorkspace', 'copyGlobal', 'delete', 'insert', 'upgrade'].includes(String(action))) {
+		if (['details', 'edit', 'favorite', 'copyWorkspace', 'copyGlobal', 'delete', 'insert', 'upgrade', 'compare', 'exportPack'].includes(String(action))) {
 			if (typeof message.key !== 'string') { throw new Error('Invalid item.'); } this.find(message.key);
 			await vscode.commands.executeCommand(prefix + action, message.key);
 		}

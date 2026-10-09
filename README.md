@@ -2,7 +2,7 @@
 
 VS Codeで再利用可能なコードを探し、明示的なInsertで挿入するための拡張です。基本UXは「editorで位置を選ぶ → Snippetを検索/選択 → Insert」。SnippetをGlobal/Workspaceで管理し、自己完結したPackとして配布する構想です。
 
-**現在はPhase 3までの実装です。** native一覧・単一詳細panel・作成/Pack/copyに加え、全Insert入口から共通pipelineを使って依存、template、mode、conflict/stale検証、preview、一括適用を行います。安全に判断できないケースは停止します。
+**現在はPhase 4までの実装です。** native一覧・単一詳細panel・共通Insertion pipelineに加え、標準DiffによるConflict比較、`.tcp-sp` Import/Export、任意source markerを実装しています。安全に判断できないケースは停止します。
 
 - [v1仕様書](docs/product-spec.md)
 - [設計・API・セキュリティ監査と段階的な実装計画](docs/architecture-review.md)
@@ -10,12 +10,13 @@ VS Codeで再利用可能なコードを探し、明示的なInsertで挿入す�
 - [Phase 1の結果・検証範囲・未解決事項](docs/phase1-results.md)
 - [Phase 2の結果・検証範囲・未解決事項](docs/phase2-results.md)
 - [Phase 3の結果・Insert範囲・Undo/制限](docs/phase3-results.md)
+- [Phase 4の結果・ZIP security・Conflict/Diff・marker](docs/phase4-results.md)
 - [確定した明示Insert方針](docs/insertion-ux-policy.md)
 - [追加D&D UX調査・候補比較・Research PoC](docs/dnd-ux-investigation.md)
 - [公開repositoryのチェック手順](docs/public-repository-security.md)
 - [GitHubリポジトリ](https://github.com/oz-coden/turbo-code-palette)
 
-`formatVersion`はmetadata schema、`version`はasset revisionとして独立します。意味不変migrationはformatVersionだけ更新でき、asset version増加を要求しません。Phase 3完了後、Phase 4には自動で進みません。
+`formatVersion`はmetadata schema、`version`はasset revisionとして独立します。意味不変migrationはformatVersionだけ更新でき、asset version増加を要求しません。Phase 4完了後、Phase 5には自動で進みません。
 
 ## Libraryの操作
 
@@ -34,6 +35,18 @@ Activity BarのTurbo Code Paletteを開き、Snippets/Packs一覧から詳細を
 editorで位置/selectionを選び、一覧Insert、右クリックInsert、Command Paletteの`Insert Snippet`、Pack詳細memberのInsertを実行します。`Insert Snippet with Mode…`で利用可能なmodeを選べます。templateがあれば入力し、warning/optional preview後にtarget/assetsを再検証してapplyします。single-document挿入は一回のUndoで戻せます。
 
 separate-filesはnative workspace内の新規folderへ出力し、既存fileを上書きしません。**file作成はeditor Undoの対象外**で、editor/fileの混在planは拒否します。structure-awareはplaintextの明示file targetのみ。C#等で未対応なら代替modeを明示選択します。generic collision/既存実装検証の限界はPhase 3結果を参照してください。`previewBeforeInsert`は既定falseです。
+
+previewを有効にすると、任意のCompareからVS Code標準Diffでcurrent/planned contentを比較できます。ConflictではInsert/copyを停止してCompareを案内します。同UUIDのrevision/locationは一覧の右クリック、詳細、Command Paletteの`Compare Asset Revisions / Locations`から比較できます。Diffは読み取り専用の一時snapshotで、比較だけでは挿入・置換・usage更新を行いません。
+
+`sourceMarkers`は既定falseです。ONにすると、対応言語の安全な行境界/contextに限りUUID/version/hashのcommentを付けます。文字列/comment等の可能性を保守的に除外できない場合や未対応言語ではmarkerを省略します。markerだけで既存実装の互換性を断定しません。Clean Copyによる除去はPhase 5以降です。
+
+## Pack Import / Export
+
+Packs toolbarまたはCommand Paletteの`Import Pack (.tcp-sp)`で通常ZIPを選び、Workspace/Globalを選択します。library外のprivate stagingで完全検証してから、additions / identical / different-version / conflictsを表示します。確定前のキャンセルではlibraryを変更しません。全scopeの同UUID/version content conflictがある場合、通常Importを拒否します。
+
+Compare後に明示的な`Fork whole Pack`を選べます。Packと全SnippetのUUID、既知の内部dependency UUIDを新規生成します。source bytes、version、unknown metadataは保持するため、unknown field内の独自UUID参照はユーザーが確認してください。different versionsは別Packとして共存可能です。`Replace older Pack`は内容変更したSnippetも新しいversionである場合だけ表示し、明示確認後に一Packの既存transaction/journalで保存します。同versionの異なる内容を直接overwriteする操作はありません。新しいrevisionは既存metadata formで明示的に作成します。
+
+Pack右クリック、詳細または`Export Pack (.tcp-sp)`でlibrary外の新規filenameへExportします。root `pack.json`、全file、empty directories、unknown metadataを保持し、原本を変更しません。既存archiveはoverwriteせず、新しいfilenameを要求します。v1 Import/Exportはnative local filesystemのみ。Exportのexclusive publishにはhardlinkを作成できるfilesystemが必要で、未対応の場合は停止します。
 
 ## 合成Insert demo / D&D履歴
 
@@ -66,7 +79,7 @@ npm run package
 npm run check-public -- --history
 ```
 
-`test:unit`はVS Codeなしのcore/service/security tests、`test`は固定した最低対応版1.134.0のGUI Hostでintegration testsを実行します。`test:host`はインストール済みWindows VS Codeを使い、個人profileを共有しません。別環境ではTCP_VSCODE_EXECUTABLEを指定できます。件数/実行結果はPhase 3結果文書を参照。テスト/downloadにはネットワーク・GUI実行が必要です。
+`test:unit`はVS Codeなしのcore/service/security tests、`test`は固定した最低対応版1.134.0のGUI Hostでintegration testsを実行します。`test:host`はインストール済みWindows VS Codeを使い、個人profileを共有しません。別環境ではTCP_VSCODE_EXECUTABLEを指定できます。件数/実行結果はPhase 4結果文書を参照。テスト/downloadにはネットワーク・GUI実行が必要です。
 
 Research UX Labは除去しました。比較結果と当時のcommitはD&D UX調査文書に残っています。
 

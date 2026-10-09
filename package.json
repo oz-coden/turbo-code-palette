@@ -17,6 +17,9 @@
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
+      {"command":"turbo-code-palette.importPack","title":"Turbo Code Palette: Import Pack (.tcp-sp)"},
+      {"command":"turbo-code-palette.exportPack","title":"Turbo Code Palette: Export Pack (.tcp-sp)"},
+      {"command":"turbo-code-palette.compare","title":"Turbo Code Palette: Compare Asset Revisions / Locations"},
       {
         "command": "turbo-code-palette.reloadCatalog",
         "title": "Turbo Code Palette: Reload Library",
@@ -93,6 +96,7 @@
         { "command": "turbo-code-palette.insertWithMode", "group": "1_insert@2" }
       ],
       "view/title": [
+        {"command":"turbo-code-palette.importPack","when":"view == turbo-code-palette.packs","group":"navigation@5"},
         {
           "command": "turbo-code-palette.openDropTarget",
           "when": "view == turbo-code-palette.demos",
@@ -109,6 +113,8 @@
         { "command": "turbo-code-palette.configureGlobalRoot", "when": "view == turbo-code-palette.packs", "group": "library@3" }
       ],
       "view/item/context": [
+        {"command":"turbo-code-palette.exportPack","when":"viewItem == tcp.pack","group":"3_copy@3"},
+        {"command":"turbo-code-palette.compare","when":"viewItem == tcp.snippet || viewItem == tcp.pack","group":"2_edit@3"},
         {
           "command": "turbo-code-palette.insertDemo",
           "when": "view == turbo-code-palette.demos && viewItem == tcp.phase0.snippet",
@@ -135,6 +141,7 @@
     "configuration": {
       "title": "Turbo Code Palette",
       "properties": {
+        "turboCodePalette.sourceMarkers": {"type":"boolean","default":false,"description":"Optionally annotate inserted source with UUID/version comment markers. Only supported languages and conservatively verified line contexts are annotated. Markers are comparison evidence, never proof of compatibility."},
         "turboCodePalette.globalRoot": {
           "type": "string",
           "default": "",
@@ -179,6 +186,8 @@
     "@types/mocha": "^10.0.10",
     "@types/node": "24.x",
     "@types/vscode": "^1.134.0",
+    "@types/yauzl": "3.4.0",
+    "@types/yazl": "3.3.1",
     "@vscode/test-cli": "^0.0.15",
     "@vscode/test-electron": "^3.0.0",
     "esbuild": "^0.28.1",
@@ -192,6 +201,8 @@
     "serialize-javascript": "^7.0.6"
   },
   "dependencies": {
-    "jsonc-parser": "3.3.1"
+    "jsonc-parser": "3.3.1",
+    "yauzl": "3.4.0",
+    "yazl": "3.3.1"
   }
 }

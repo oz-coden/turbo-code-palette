@@ -8,7 +8,9 @@ import { sha256 } from '../core/assets/fingerprint';
 import { Catalog } from '../storage/catalog';
 import { loadCatalog, type AssetLocation } from '../storage/discovery';
 import type { StorageRoot } from '../storage/roots';
-import { nativeStore, type LibraryStore, type StoreFactory } from '../storage/store';
+import { nativeStore, type StoreFactory } from '../storage/store';
+import { inspectPackTree } from '../storage/packValidation';
+import { ConflictError } from '../core/conflict';
 import { byteFingerprint, cloneTree, commitTree, readTree, treeDirectories, type FileTree, type MutableTree } from '../storage/transaction';
 import { pendingRecovery } from '../storage/recovery';
 import { pathCollisionKey, validateRelativePath } from '../storage/safePaths';
@@ -109,28 +111,11 @@ export class Library {
 		if (!pack.metadata.canEdit || !pack.integrityHash || !pack.semanticHash) { throw new Error('This Pack is incomplete, legacy or future-format. Upgrade/repair it before editing.'); }
 	}
 	private async validate(tree: FileTree, root: StorageRoot): Promise<void> {
-		const document = new MetadataDocument(decoder.decode(tree.get('pack.json') ?? Buffer.alloc(0)));
-		if (!readMetadata(document, 'pack').valid) { throw new Error('Invalid Pack metadata.'); }
-		// Reuse the actual discovery model on staged bytes, including source/reference validation.
-		const memory: LibraryStore = {
-			...this.stores(root),
-			async list(relative) {
-				if (!relative) { return [{ name: 'Pack', directory: true }]; }
-				const prefix = relative === 'Pack' ? '' : relative.slice('Pack/'.length) + '/';
-				const entries = new Map<string, boolean>();
-				for (const name of [...tree.keys(), ...treeDirectories(tree).map(name => name + '/')]) { if (name.startsWith(prefix)) { const suffix = name.slice(prefix.length), head = suffix.split('/')[0]; if (head) { entries.set(head, suffix.includes('/')); } } }
-				return [...entries].map(([name, directory]) => ({ name, directory }));
-			},
-			async read(relative, limit) { const bytes = tree.get(relative.slice('Pack/'.length)); if (!bytes || bytes.length > limit) { throw new Error('Missing/oversized staged file.'); } return bytes; },
-		};
-		const staging = new Catalog(); const snapshot = await staging.reload([root], () => memory);
-		const optionalIssues = new Set([...snapshot.packs, ...snapshot.snippets].flatMap(asset => asset.metadata.issues.filter(issue => issue.severity === 'warning').map(issue => `${asset.relativePath}/${asset.metadata.kind}.json:${issue.code}`)));
-		if (snapshot.packs.length !== 1 || !snapshot.packs[0].integrityHash || snapshot.diagnostics.some(issue => !optionalIssues.has(`${issue.asset}:${issue.code}`))) { throw new Error('Staged Pack validation failed. Repair invalid metadata/references first.'); }
-		if (document.format !== 'future' && snapshot.snippets.every(asset => asset.metadata.document.format !== 'future')) { validatePackDependencies(snapshot.snippets); }
+		await inspectPackTree(tree, root, this.stores(root).verifiedFileIdentity);
 	}
 	private async apply(root: StorageRoot, target: string, previous: FileTree | undefined, next: FileTree | undefined,
-		sources: readonly AssetLocation[] = []): Promise<void> {
-		const guard = async (transactionId?: string) => { if (!this.roots().some(current => sameRoot(current, root))) { throw new Error('Library root changed. Reload before applying.'); } if ((await pendingRecovery(this.stores(root))).some(record => record.target === target && record.id !== transactionId)) { throw new Error('Review the interrupted save for this Pack before changing it.'); } await this.dirtyGuard([root, ...sources.map(source => source.root)], [target, ...sources.map(packOf)]); for (const source of sources) { await this.tree(source); } };
+		sources: readonly AssetLocation[] = [], additionalGuard: () => Promise<void> = async () => {}): Promise<void> {
+		const guard = async (transactionId?: string) => { await additionalGuard(); if (!this.roots().some(current => sameRoot(current, root))) { throw new Error('Library root changed. Reload before applying.'); } if ((await pendingRecovery(this.stores(root))).some(record => record.target === target && record.id !== transactionId)) { throw new Error('Review the interrupted save for this Pack before changing it.'); } await this.dirtyGuard([root, ...sources.map(source => source.root)], [target, ...sources.map(packOf)]); for (const source of sources) { await this.tree(source); } };
 		await commitTree(this.stores(root), target, previous && byteFingerprint(previous), next, guard, tree => this.validate(tree, root));
 		this.catalog.adoptPack(await loadCatalog([root], this.stores), root, target);
 	}
@@ -148,7 +133,7 @@ export class Library {
 		for (const asset of members) {
 			const present = existing.find(member => member.metadata.id === asset.metadata.id);
 			if (present) {
-				if (present.metadata.version!.text !== asset.metadata.version!.text || present.semanticHash !== asset.semanticHash) { throw new Error('Destination already contains another version/implementation of this Snippet UUID. Choose a new Pack.'); }
+				if (present.metadata.version!.text !== asset.metadata.version!.text || present.semanticHash !== asset.semanticHash) { throw new ConflictError('Destination already contains another version/implementation of this Snippet UUID. Choose a new Pack.', { incoming: asset, existing: [present] }); }
 				continue;
 			}
 			const bytes = await this.tree(asset), directory = memberDirectory(tree, asset);
@@ -209,7 +194,7 @@ export class Library {
 	copySnippets(assets: readonly AssetLocation[], root: StorageRoot, newPackName?: string): Promise<{ added: readonly string[]; warnings: readonly string[] }> { return this.serial(async () => {
 		const destination = await this.destination(root, newPackName), existing = destination.pack ? this.members(destination.pack) : [];
 		if (existing.length) { validatePackDependencies(existing); }
-		const closure = resolveClosure([...existing, ...assets], this.catalog.snapshot?.snippets ?? [], { workspaceId: root.workspaceId });
+		const closure = (() => { try { return resolveClosure([...existing, ...assets], this.catalog.snapshot?.snippets ?? [], { workspaceId: root.workspaceId }); } catch (error) { const incoming = assets.find(asset => existing.some(member => member.metadata.id === asset.metadata.id && (member.metadata.version!.text !== asset.metadata.version!.text || member.semanticHash !== asset.semanticHash))); if (incoming) { throw new ConflictError((error as Error).message, { incoming, existing: existing.filter(member => member.metadata.id === incoming.metadata.id) }); } throw error; } })();
 		if (!await this.addMembers(destination.tree, closure.members, existing)) { return { added: [], warnings: closure.warnings }; }
 		if (destination.pack) { destination.tree.set('pack.json', Buffer.from(destination.pack.metadata.document.patchKnown(['version'], nextVersion(destination.pack.metadata.version!)).text)); }
 		await this.apply(root, destination.target, destination.previous, destination.tree, closure.members);
@@ -220,7 +205,7 @@ export class Library {
 		const source = await this.tree(asset);
 		const copies = this.catalog.snapshot?.packs.filter(pack => sameRoot(pack.root, root) && pack.metadata.id === asset.metadata.id && pack.metadata.version!.text === asset.metadata.version!.text) ?? [];
 		for (const copy of copies) { if (asset.semanticHash && asset.semanticHash === copy.semanticHash || byteFingerprint(await this.tree(copy)) === byteFingerprint(source)) { return; } }
-		if (copies.length) { throw new Error('Destination contains a conflicting Pack revision. Create a newer version before copying.'); }
+		if (copies.length) { throw new ConflictError('Destination contains a conflicting Pack revision. Create a newer version before copying.', { incoming: asset, existing: copies }); }
 		await this.apply(root, folderName(asset.metadata.name!) + '-' + randomUUID(), undefined, source, [asset]);
 	}); }
 	deleteAssets(assets: readonly AssetLocation[]): Promise<void> { return this.serial(async () => {
@@ -248,6 +233,22 @@ export class Library {
 	async source(asset: AssetLocation, source: string): Promise<Buffer> {
 		return (await this.sources(asset, [source])).get(source)!;
 	}
+	/** Verified immutable snapshot for standard Diff/export. */
+	async assetTree(asset: AssetLocation): Promise<MutableTree> { return this.tree(asset); }
+	importPack(tree: FileTree, root: StorageRoot, guard: () => Promise<void>, replacement?: AssetLocation): Promise<void> { return this.serial(async () => {
+		if (root.uri || !this.stores(root).verifiedFileIdentity) { throw new Error('Pack Import requires a verified native local library.'); }
+		await guard(); const snapshot = await inspectPackTree(tree, root, true, true), incoming = snapshot.packs[0];
+		let previous: FileTree | undefined;
+		if (replacement) {
+			if (!sameRoot(replacement.root, root) || replacement.metadata.id !== incoming.metadata.id) { throw new Error('Replacement must target the same Pack UUID.'); }
+			validateMetadataChange(replacement.metadata.document, incoming.metadata.document, 'pack');
+			if (replacement.metadata.version!.text === incoming.metadata.version!.text) { throw new Error('Replace requires an explicitly newer Pack revision.'); }
+			for (const member of this.members(replacement)) { const next = snapshot.snippets.find(asset => asset.metadata.id === member.metadata.id); if (next && next.semanticHash !== member.semanticHash) { validateMetadataChange(member.metadata.document, next.metadata.document, 'snippet'); if (next.metadata.version!.text === member.metadata.version!.text) { throw new Error('Changed Snippet content requires a newer Snippet version.'); } } }
+			previous = await this.tree(replacement);
+		}
+		await guard();
+		await this.apply(root, replacement?.relativePath ?? folderName(incoming.metadata.name!) + '-' + randomUUID(), previous, tree, [], guard);
+	}); }
 	async sources(asset: AssetLocation, sources: readonly string[]): Promise<Map<string, Buffer>> {
 		for (const source of sources) { validateRelativePath(source); if (!asset.metadata.sources.includes(source)) { throw new Error('Source is not declared by this Snippet.'); } }
 		if (!sources.length) { return new Map(); } const tree = await this.tree(asset); return new Map(sources.map(source => [source, tree.get(source)!]));

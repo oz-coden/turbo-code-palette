@@ -14,6 +14,9 @@ import { exportNames, supportsStructure, validateCollisions } from '../language/
 import { assertNoLinks, containedPath, pathCollisionKey } from '../storage/safePaths';
 import { applyFiles, validateDestination, type FileOutput } from './fileInsertion';
 import type { UserState } from './userState';
+import { ConflictError } from '../core/conflict';
+import { markSource, markerEvidence, sourceLanguage } from '../language/sourceMarker';
+import { ComparisonDocuments } from '../ui/comparison';
 
 export interface InsertionInteractions {
 	input(asset: AssetLocation, variable: Variable): Promise<string | undefined>;
@@ -34,11 +37,13 @@ const rootStamp = (library: Library) => JSON.stringify(library.roots());
 
 export class InsertionPipeline implements vscode.Disposable {
 	private busy = false;
-	/** Session-only verification cache. No persistent provenance database or source markers. */
+	/** Session-only verification cache. No persistent provenance database. */
 	private readonly receipts = new Map<string, Receipt[]>();
 	readonly interactions: InsertionInteractions;
 	lastPlan?: InsertionPlan;
-	constructor(private readonly library: Library, private readonly state: UserState, private readonly rootGuard: () => void = () => {}, interactions?: InsertionInteractions) {
+	private comparison?: ComparisonDocuments;
+	constructor(private readonly library: Library, private readonly state: UserState, private readonly rootGuard: () => void = () => {}, interactions?: InsertionInteractions, private readonly sharedComparison?: ComparisonDocuments) {
+		this.comparison = sharedComparison;
 		this.interactions = interactions ?? {
 			input: async (asset, variable) => {
 				if (variable.options) { return (await vscode.window.showQuickPick(variable.options.map(value => ({ label: value || '(empty)', value, description: value === variable.defaultValue ? 'Default' : undefined })), { title: asset.metadata.name + ' · ' + variable.name, placeHolder: variable.description }))?.value; }
@@ -51,9 +56,7 @@ export class InsertionPipeline implements vscode.Disposable {
 				const folder = await vscode.window.showInputBox({ title: 'New output folder', value: 'TCP-Snippets', prompt: 'A new folder is created atomically. File creation is outside editor Undo.' }); return folder ? { parent: parent.fsPath, folder } : undefined;
 			},
 			preview: async plan => {
-				const content = plan.output ? [...plan.output.files].map(([name, text]) => `--- ${name} ---\n${text}`).join('\n\n') : plan.after;
-				const document = await vscode.workspace.openTextDocument({ content, language: 'plaintext' }); await vscode.window.showTextDocument(document, { preview: true });
-				return await vscode.window.showInformationMessage('Insertion preview — target is unchanged.', { modal: true }, 'Insert') === 'Insert';
+				this.comparison ??= new ComparisonDocuments(); return this.comparison.preview(plan);
 			},
 		};
 	}
@@ -72,7 +75,8 @@ export class InsertionPipeline implements vscode.Disposable {
 		if (assets.some(asset => !asset.usable || asset.root.uri || !asset.metadata.canInsert || asset.metadata.blockedFeatures.has('exports'))) { throw new Error('Asset is not eligible for insertion. Use a verified native library root and valid supported metadata.'); }
 		const fresh = await loadCatalog(this.library.roots(), this.library.stores);
 		for (const asset of assets) {
-			if (fresh.snippets.some(other => locationKey(other) !== locationKey(asset) && other.metadata.id === asset.metadata.id && other.metadata.version!.text === asset.metadata.version!.text && other.semanticHash !== asset.semanticHash)) { throw new Error('Same UUID/version content conflict appeared. Reload and compare before insertion.'); }
+			const conflicts = fresh.snippets.filter(other => locationKey(other) !== locationKey(asset) && other.metadata.id === asset.metadata.id && other.metadata.version!.text === asset.metadata.version!.text && other.semanticHash !== asset.semanticHash);
+			if (conflicts.length) { throw new ConflictError('Same UUID/version content conflict appeared. Reload and compare before insertion.', { incoming: asset, existing: conflicts }); }
 			const current = fresh.snippets.find(item => locationKey(item) === locationKey(asset));
 			const pack = this.library.catalog.snapshot!.packs.find(item => sameRoot(item.root, asset.root) && item.relativePath === packOf(asset));
 			const newPack = fresh.packs.find(item => sameRoot(item.root, asset.root) && item.relativePath === packOf(asset));
@@ -96,7 +100,8 @@ export class InsertionPipeline implements vscode.Disposable {
 			const closure = resolveClosure([root], this.library.members(pack), { workspaceId: root.root.workspaceId, strictConflicts: true });
 			const ordered = dependencyOrder(closure.members);
 			for (const asset of ordered) {
-				if (snapshot.snippets.some(other => other.metadata.id === asset.metadata.id && other.metadata.version!.text === asset.metadata.version!.text && other.semanticHash !== asset.semanticHash)) { throw new Error('Same UUID/version has different content. Conflict comparison is required before insertion.'); }
+				const conflicts = snapshot.snippets.filter(other => other.metadata.id === asset.metadata.id && other.metadata.version!.text === asset.metadata.version!.text && other.semanticHash !== asset.semanticHash);
+				if (conflicts.length) { throw new ConflictError('Same UUID/version has different content. Conflict comparison is required before insertion.', { incoming: asset, existing: conflicts }); }
 			}
 			await this.assets(ordered);
 			const before = document.getText(), uri = document.uri.toString(), history = this.receipts.get(uri) ?? [], verified = [...history].reverse().find(receipt => receipt.text === before);
@@ -111,11 +116,12 @@ export class InsertionPipeline implements vscode.Disposable {
 			const requireAsset = (asset: AssetLocation) => { if (needed.has(asset.metadata.id!)) { return; } needed.add(asset.metadata.id!); if (!canSkip(asset)) { for (const dependency of asset.metadata.dependencies) { requireAsset(byId.get(dependency.id)!); } } };
 			requireAsset(root);
 			for (const asset of ordered.filter(asset => needed.has(asset.metadata.id!))) {
-				if (verified?.ambiguous.has(asset.metadata.id!) || !verified && history.some(receipt => receipt.implementations.has(asset.metadata.id!) || receipt.ambiguous.has(asset.metadata.id!))) { throw new Error('Previously inserted implementation changed or cannot be verified. Comparison is required before reinsertion.'); }
+				if (verified?.ambiguous.has(asset.metadata.id!) || !verified && history.some(receipt => receipt.implementations.has(asset.metadata.id!) || receipt.ambiguous.has(asset.metadata.id!))) { throw new ConflictError('Previously inserted implementation changed or cannot be verified. Comparison is required before reinsertion.', { currentText: before, requestedText: [...(await this.library.sources(asset, asset.metadata.sources)).values()].map(bytes => decoder.decode(bytes)).join('\n') }); }
 				const receipt = verified?.implementations.get(asset.metadata.id!);
 				if (canSkip(asset)) { skipped.push(asset); continue; }
-				if (receipt) { throw new Error('Existing insertion uses a different version/content. Comparison is required.'); }
+				if (receipt) { throw new ConflictError('Existing insertion uses a different version/content. Comparison is required.', { currentText: before, requestedText: [...(await this.library.sources(asset, asset.metadata.sources)).values()].map(bytes => decoder.decode(bytes)).join('\n') }); }
 				const bytes = await this.library.sources(asset, asset.metadata.sources), raw = asset.metadata.sources.map(source => { const buffer = bytes.get(source)!; if (buffer.includes(0)) { throw new Error('Binary source is not insertable.'); } return decoder.decode(buffer); });
+				if (markerEvidence(before, document.languageId).some(marker => marker.id.toLowerCase() === asset.metadata.id)) { throw new ConflictError('Source marker indicates a possible existing implementation. Compare content; a marker alone cannot establish compatibility.', { currentText: before, requestedText: raw.join('\n') }); }
 				const variables = templateInputs(asset.metadata.document, raw), values = new Map<string, string>();
 				for (const variable of variables) { const value = await this.interactions.input(asset, variable); if (value === undefined) { return 'cancelled'; } validateValue(variable, value); values.set(variable.name, value); }
 				const sources = raw.map(source => substitute(source, variables, values));
@@ -130,12 +136,26 @@ export class InsertionPipeline implements vscode.Disposable {
 				items.push({ asset, mode, sources });
 			}
 			if (!items.length) { return 'already-present'; }
-			validateCollisions(before, items.filter(item => item.mode !== 'separate-files').map(item => ({ name: item.asset.metadata.name!, exports: exportNames(item.asset.metadata.document), sources: item.sources })));
+			try { validateCollisions(before, items.filter(item => item.mode !== 'separate-files').map(item => ({ name: item.asset.metadata.name!, exports: exportNames(item.asset.metadata.document), sources: item.sources }))); }
+			catch (error) { throw new ConflictError((error as Error).message, { currentText: before, requestedText: items.flatMap(item => item.sources).join('\n') }); }
 			// A single implementation cannot introduce duplicate declared exports in this batch either.
-			validateCollisions('', items.map(item => ({ name: item.asset.metadata.name!, exports: exportNames(item.asset.metadata.document), sources: [] })));
+			try { validateCollisions('', items.map(item => ({ name: item.asset.metadata.name!, exports: exportNames(item.asset.metadata.document), sources: [] }))); }
+			catch (error) { throw new ConflictError((error as Error).message, { currentText: before, requestedText: items.flatMap(item => item.sources).join('\n') }); }
+			if (vscode.workspace.getConfiguration('turboCodePalette').get<boolean>('sourceMarkers', false)) {
+				const eol = document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n', selection = request.target!.selection;
+				for (const item of items) {
+					const identity = { id: item.asset.metadata.id!, version: item.asset.metadata.version!.text };
+					if (item.mode === 'separate-files') { item.sources = item.sources.map((source, index) => { const marked = markSource(identity, source, sourceLanguage(item.asset.metadata.sources[index]), '', 0, 0, eol); if (!marked) { warnings.push(`${item.asset.metadata.name}: source marker omitted for unsupported language/context.`); } return marked ?? source; }); }
+					else {
+						const start = ['end-of-file', 'structure-aware'].includes(item.mode) ? before.length : document.offsetAt(item.mode === 'replace-selection' ? selection.start : selection.active), end = item.mode === 'replace-selection' ? document.offsetAt(selection.end) : start;
+						const marked = markSource(identity, item.sources.join(eol), document.languageId, before, start, end, eol);
+						if (marked) { item.sources = [marked]; } else { warnings.push(`${item.asset.metadata.name}: source marker omitted for unsupported language/context or non-line-boundary insertion.`); }
+					}
+				}
+			}
 			let output: FileOutput | undefined, edits: OffsetEdit[] = [];
 			if (items.some(item => item.mode === 'separate-files')) {
-				if (items.some(item => item.mode !== 'separate-files')) { throw new Error('Mixed editor/file modes cannot be applied atomically. Use compatible modes for the dependency closure.'); }
+				if (items.some(item => item.mode !== 'separate-files')) { throw new Error('Mixed editor/file plans are unsupported in v1: the public editor/resource APIs do not provide the transaction and cross-resource Undo guarantees TCP requires. Use compatible modes for the entire dependency closure. No changes were applied.'); }
 				const destination = await this.interactions.output(); if (!destination) { return 'cancelled'; }
 				const files = new Map<string, string>(), keys = new Set<string>();
 				for (const item of items) { for (const [index, source] of item.asset.metadata.sources.entries()) { const key = pathCollisionKey(source); if (keys.has(key)) { throw new Error('Output source path collision. Use distinct source paths.'); } keys.add(key); files.set(source, item.sources[index]); } }
@@ -180,5 +200,5 @@ export class InsertionPipeline implements vscode.Disposable {
 			return 'inserted';
 		} finally { this.busy = false; }
 	}
-	dispose(): void { this.receipts.clear(); }
+	dispose(): void { this.receipts.clear(); if (!this.sharedComparison) { this.comparison?.dispose(); } }
 }
