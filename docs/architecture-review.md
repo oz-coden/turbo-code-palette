@@ -336,6 +336,8 @@ licenseNotices[].textは収集/dedupし安全な対象言語commentとして出�
 
 ### Phase 5 — 基本Clean Copy
 
+2026-10-15、[Phase 5結果](phase5-results.md)の範囲で実装。native Clean Copy section、capability付き順序pipeline、独立commentとして証明できるTCP marker除去、notice保持、同一final planのClipboard/Preview/Untitled/Save Asを追加。generic Bundleは明示選択と既存resolverを使うreview JSONのみ。generic code merge/comment/whitespace処理は実装せず、Phase 6は別承認gate。
+
 - 目標/ファイル: clean pipeline/presets、cleanCopyPanel。未対応言語は無変換copy。
 - テスト: selection/file、clipboard/untitled/output、原本不変/alias拒否、notice dedup、unsupported transform/cancel。
 - 合格: previewと出力一致、対応範囲明示、source非上書き。

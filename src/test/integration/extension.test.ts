@@ -20,6 +20,15 @@ suite('Phase 0 — real Extension Host API integration (not native mouse drag)',
 	async function editor(content = 'alpha\n\nomega\n'): Promise<vscode.TextEditor> {
 		return vscode.window.showTextDocument(await vscode.workspace.openTextDocument({ content, language: 'plaintext' }));
 	}
+	async function undoOnce(document: vscode.TextDocument, expected: string): Promise<void> {
+		await vscode.window.showTextDocument(document, { preview: false });
+		await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
+		let notify = () => {}; const completed = new Promise<void>(resolve => { notify = resolve; });
+		const listener = vscode.workspace.onDidChangeTextDocument(event => { if (event.document === document && document.getText() === expected) { notify(); } });
+		const timeout = setTimeout(notify, 2000);
+		try { await vscode.commands.executeCommand('undo'); if (document.getText() !== expected) { await completed; } assert.equal(document.getText(), expected); }
+		finally { listener.dispose(); clearTimeout(timeout); }
+	}
 	async function drop(target: vscode.TextEditor, index: number, position: vscode.Position): Promise<vscode.DocumentDropEdit> {
 		const before = target.document.getText();
 		const edit = await api.dropProvider.provideDocumentDropEdits(target.document, position, drag(index), cancellation());
@@ -63,8 +72,7 @@ suite('Phase 0 — real Extension Host API integration (not native mouse drag)',
 		changes.insert(target.document.uri, position, edit.insertText as string);
 		assert.ok(await vscode.workspace.applyEdit(changes));
 		assert.equal(target.document.getText(), `alpha\n${demoSnippets[0].text}\nomega\n`);
-		await vscode.commands.executeCommand('undo');
-		assert.equal(target.document.getText(), before);
+		await undoOnce(target.document, before);
 	});
 
 	test('empty drop text plus additionalEdit inserts at EOF and Undo is atomic', async () => {
@@ -75,8 +83,7 @@ suite('Phase 0 — real Extension Host API integration (not native mouse drag)',
 		assert.ok(edit.additionalEdit);
 		assert.ok(await vscode.workspace.applyEdit(edit.additionalEdit));
 		assert.equal(target.document.getText(), before + demoSnippets[1].text);
-		await vscode.commands.executeCommand('undo');
-		assert.equal(target.document.getText(), before);
+		await undoOnce(target.document, before);
 	});
 
 	test('drop uses its target document even when another editor was active', async () => {

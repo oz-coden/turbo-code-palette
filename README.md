@@ -2,7 +2,7 @@
 
 VS Codeで再利用可能なコードを探し、明示的なInsertで挿入するための拡張です。基本UXは「editorで位置を選ぶ → Snippetを検索/選択 → Insert」。SnippetをGlobal/Workspaceで管理し、自己完結したPackとして配布する構想です。
 
-**現在はPhase 4までの実装です。** native一覧・単一詳細panel・共通Insertion pipelineに加え、標準DiffによるConflict比較、`.tcp-sp` Import/Export、任意source markerを実装しています。安全に判断できないケースは停止します。
+**現在はPhase 5までの実装です。** native一覧・共通Insertion pipeline・標準Diff・`.tcp-sp` Import/Exportに加え、安全性を限定したClean Copyを実装しています。安全に判断できないケースは停止します。
 
 - [v1仕様書](docs/product-spec.md)
 - [設計・API・セキュリティ監査と段階的な実装計画](docs/architecture-review.md)
@@ -11,12 +11,13 @@ VS Codeで再利用可能なコードを探し、明示的なInsertで挿入す�
 - [Phase 2の結果・検証範囲・未解決事項](docs/phase2-results.md)
 - [Phase 3の結果・Insert範囲・Undo/制限](docs/phase3-results.md)
 - [Phase 4の結果・ZIP security・Conflict/Diff・marker](docs/phase4-results.md)
+- [Phase 5の結果・Clean Copy保証範囲・Bundle review](docs/phase5-results.md)
 - [確定した明示Insert方針](docs/insertion-ux-policy.md)
 - [追加D&D UX調査・候補比較・Research PoC](docs/dnd-ux-investigation.md)
 - [公開repositoryのチェック手順](docs/public-repository-security.md)
 - [GitHubリポジトリ](https://github.com/oz-coden/turbo-code-palette)
 
-`formatVersion`はmetadata schema、`version`はasset revisionとして独立します。意味不変migrationはformatVersionだけ更新でき、asset version増加を要求しません。Phase 4完了後、Phase 5には自動で進みません。
+`formatVersion`はmetadata schema、`version`はasset revisionとして独立します。意味不変migrationはformatVersionだけ更新でき、asset version増加を要求しません。Phase 5完了後、Phase 6には自動で進みません。
 
 ## Libraryの操作
 
@@ -38,7 +39,19 @@ separate-filesはnative workspace内の新規folderへ出力し、既存fileを�
 
 previewを有効にすると、任意のCompareからVS Code標準Diffでcurrent/planned contentを比較できます。ConflictではInsert/copyを停止してCompareを案内します。同UUIDのrevision/locationは一覧の右クリック、詳細、Command Paletteの`Compare Asset Revisions / Locations`から比較できます。Diffは読み取り専用の一時snapshotで、比較だけでは挿入・置換・usage更新を行いません。
 
-`sourceMarkers`は既定falseです。ONにすると、対応言語の安全な行境界/contextに限りUUID/version/hashのcommentを付けます。文字列/comment等の可能性を保守的に除外できない場合や未対応言語ではmarkerを省略します。markerだけで既存実装の互換性を断定しません。Clean Copyによる除去はPhase 5以降です。
+`sourceMarkers`は既定falseです。ONにすると、対応言語の安全な行境界/contextに限りUUID/version/hashのcommentを付けます。文字列/comment等の可能性を保守的に除外できない場合や未対応言語ではmarkerを省略します。markerだけで既存実装の互換性を断定しません。Clean Copyで安全な独立comment lineと確認できるBEGIN/ENDだけを除去できます。
+
+## Clean Copy
+
+TCP sidebarの**Clean Copy** section、またはCommand Paletteの`Clean Copy`からSelection / Current File / Dependency Bundleを選びます。Readable / Competitive / Customを選び、Clipboard / Preview・Untitled / Save Asへ出力します。原本は変更しません。Previewと出力は同じ固定final planを使います。
+
+ReadableとCompetitiveは現在同じ安全なtransformだけです。対応providerで確認できるTCP marker commentの内容だけを除去し、改行・通常comment・whitespaceを残します。Customは現在利用可能なtransformだけを選択できます。未対応のcomment除去、using削除、rename、minify等へのfallbackはありません。
+
+`licenseNotices[].text`はexact textでdeduplicateし、全Presetで保持します。対応providerの安全なcomment headerで再付与できなければ出力を停止します。未対応言語へ別言語のcommentを強制しません。TCPはnoticeを法的に除去できるか判断しません。
+
+**Dependency BundleはPhase 5ではreview用JSONです。実行可能なcode mergeではありません。** known exportのtext hitはstring/commentも含み得るため自動採用せず、Snippetを明示選択します。各Pack内部のmetadata依存を既存resolverで解決し、dependency-firstでcurrent fileとsourceを分離収録します。templateはsource dataのまま。C#のsemantic reference解決・compile可能なBundleはPhase 6へ残しています。
+
+Save Asはnative filesystemの新規filenameだけです。source URI、projected Untitled source、library内、既存file、case/Unicode alias、symlink/junction親を拒否します。exclusive publishにはhardlink対応filesystemが必要です。preview中の編集・Reload・root/provider変更・asset変更時は出力を止めます。Clean Copyはusage/recent等を更新しません。
 
 ## Pack Import / Export
 
@@ -79,7 +92,7 @@ npm run package
 npm run check-public -- --history
 ```
 
-`test:unit`はVS Codeなしのcore/service/security tests、`test`は固定した最低対応版1.134.0のGUI Hostでintegration testsを実行します。`test:host`はインストール済みWindows VS Codeを使い、個人profileを共有しません。別環境ではTCP_VSCODE_EXECUTABLEを指定できます。件数/実行結果はPhase 4結果文書を参照。テスト/downloadにはネットワーク・GUI実行が必要です。
+`test:unit`はVS Codeなしのcore/service/security tests、`test`は固定した最低対応版1.134.0のGUI Hostでintegration testsを実行します。`test:host`はインストール済みWindows VS Codeを使い、個人profileを共有しません。別環境ではTCP_VSCODE_EXECUTABLEを指定できます。件数/実行結果はPhase 5結果文書を参照。テスト/downloadにはネットワーク・GUI実行が必要です。GUI Hostはversionごとに単独起動してください。
 
 Research UX Labは除去しました。比較結果と当時のcommitはD&D UX調査文書に残っています。
 

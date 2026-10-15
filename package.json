@@ -17,6 +17,7 @@
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
+      { "command": "turbo-code-palette.cleanCopy", "title": "Turbo Code Palette: Clean Copy", "icon": "$(copy)" },
       {"command":"turbo-code-palette.importPack","title":"Turbo Code Palette: Import Pack (.tcp-sp)"},
       {"command":"turbo-code-palette.exportPack","title":"Turbo Code Palette: Export Pack (.tcp-sp)"},
       {"command":"turbo-code-palette.compare","title":"Turbo Code Palette: Compare Asset Revisions / Locations"},
@@ -77,6 +78,7 @@
     },
     "views": {
       "turbo-code-palette": [
+        { "id": "turbo-code-palette.cleanCopy", "name": "Clean Copy" },
         {
           "id": "turbo-code-palette.snippets",
           "name": "Snippets"

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Complete Phase 5 safe Clean Copy: native sidebar scopes, capability-gated ordered transforms and Readable / Competitive / Custom presets.
+- Remove only proven standalone TCP marker comment contents; preserve EOL, ordinary comments and code whitespace. Keep uncertain/literal/markup candidates with warnings.
+- Collect/deduplicate license notice text, preserve it in every preset, and stop if a safe language-owned header cannot be provided.
+- Add explicit-selection Dependency Bundle review JSON using the shared Pack resolver/SCC ordering; defer semantic binding and executable merging to Phase 6.
+- Add exact-plan Clipboard / readonly Preview / independent Untitled / exclusive new-file Save As with stale validation and source/library/alias protection.
+
 - Complete Phase 4: secure ordinary-ZIP `.tcp-sp` Pack Import/Export, staged preview, explicit whole-Pack Fork and compatible newer-revision Replace.
 - Add standard VS Code Diff for revision conflicts and optional insertion previews, with readonly bounded snapshots.
 - Add optional language-owned source markers (default OFF), conservative context gating and marker evidence without automatic compatibility assumptions.
@@ -18,4 +24,4 @@
 - Separate metadata format migration from asset version updates when asset meaning is unchanged.
 - Preserve the generated VS Code TypeScript extension scaffold.
 - Document the v1 specification, API feasibility review, architecture, security requirements, and phased implementation plan.
-- Phases 1–4 are complete; Phase 5 starts only after a separate user instruction.
+- Phases 1–5 are complete; Phase 6 starts only after a separate user instruction.
