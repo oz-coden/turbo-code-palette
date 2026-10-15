@@ -1,3 +1,4 @@
+import { undoOnce } from '../editorUndo';
 import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
@@ -51,8 +52,8 @@ suite('Phase 4 — archive, standard Diff and optional markers in a real Extensi
 	}));
 	test('markers default OFF; enabled safe comments remain one editor Undo, and forged/copied marker is never sufficient proof', async () => sandbox(async (library, state) => {
 		assert.equal(vscode.workspace.getConfiguration('turboCodePalette').get('sourceMarkers'), false); const asset = library.catalog.snapshot!.snippets[0];
-		let target = await editor(), pipeline = new InsertionPipeline(library, state, undefined, io()); await pipeline.run(request(asset, target)); assert.ok(!target.document.getText().includes('TCP BEGIN')); await vscode.commands.executeCommand('undo'); assert.equal(target.document.getText(), 'class Target {}\n'); pipeline.dispose();
-		await setting('sourceMarkers', true, async () => { target = await editor(); pipeline = new InsertionPipeline(library, state, undefined, io()); const before = target.document.getText(); await pipeline.run(request(asset, target)); const inserted = target.document.getText(); assert.equal(markerEvidence(inserted, 'csharp')[0].id, asset.metadata.id); assert.match(inserted, /\/\/ TCP END/); await vscode.commands.executeCommand('undo'); assert.equal(target.document.getText(), before); pipeline.dispose();
+		let target = await editor(), pipeline = new InsertionPipeline(library, state, undefined, io()); await pipeline.run(request(asset, target)); assert.ok(!target.document.getText().includes('TCP BEGIN')); await undoOnce(target.document, 'class Target {}\n'); pipeline.dispose();
+		await setting('sourceMarkers', true, async () => { target = await editor(); pipeline = new InsertionPipeline(library, state, undefined, io()); const before = target.document.getText(); await pipeline.run(request(asset, target)); const inserted = target.document.getText(); assert.equal(markerEvidence(inserted, 'csharp')[0].id, asset.metadata.id); assert.match(inserted, /\/\/ TCP END/); await undoOnce(target.document, before); pipeline.dispose();
 			const metadataPath = path.join(asset.root.path, asset.relativePath, 'snippet.json'), metadata = JSON.parse(await fs.readFile(metadataPath, 'utf8')); delete metadata.exports; await fs.writeFile(metadataPath, JSON.stringify(metadata)); await library.reload();
 			const changed = inserted.replace('int VALUE = 1;', 'int RENAMED = 999;'), fresh = new InsertionPipeline(library, state, undefined, io()), copied = await editor(changed); await assert.rejects(fresh.run(request(library.catalog.snapshot!.snippets[0], copied)), /marker alone/); assert.equal(copied.document.getText(), changed); fresh.dispose(); });
 	}));

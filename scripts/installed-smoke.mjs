@@ -1,9 +1,14 @@
 import { runTests, resolveCliPathFromVSCodeExecutablePath } from '@vscode/test-electron';
 import { execFileSync } from 'node:child_process';
-import { mkdir, writeFile, readdir } from 'node:fs/promises';
+import { mkdir, writeFile, readdir, mkdtemp, realpath } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-const version=process.argv[2]??'1.134.0', base=path.resolve('.vscode-test','vsix-smoke-'+version+'-'+Date.now()),profile=path.join(base,'profile'),extensions=path.join(base,'extensions'),workspace=path.join(base,'workspace');
+import os from 'node:os';
+const version=process.argv[2]??'1.134.0';
+// Unix domain socket paths are bounded (notably on macOS): keep isolated profiles
+// short instead of nesting a timestamped profile under a long checkout path.
+const base=process.platform==='win32'?path.resolve('.vscode-test','vsix-smoke-'+version+'-'+Date.now()):await realpath(await mkdtemp(path.join(os.tmpdir(),'tcp-')));
+const profile=path.join(base,'p'),extensions=path.join(base,'extensions'),workspace=path.join(base,'workspace');
 for(const folder of [path.join(profile,'User'),extensions,workspace]){await mkdir(folder,{recursive:true});}
 await writeFile(path.join(profile,'User','settings.json'),JSON.stringify({'workbench.startupEditor':'none','security.workspace.trust.enabled':false,'extensions.autoUpdate':false,'update.mode':'none'}));
 const executable=process.env.TCP_VSCODE_EXECUTABLE??path.resolve('.vscode-test',`vscode-win32-x64-archive-${version}`,'Code.exe');if(!existsSync(executable)){throw new Error('Use an existing QA installation via TCP_VSCODE_EXECUTABLE. No automatic program download.');}

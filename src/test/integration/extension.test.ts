@@ -1,3 +1,4 @@
+import { undoOnce } from '../editorUndo';
 import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
 import type { Phase0Api } from '../../extension';
@@ -19,15 +20,6 @@ suite('Phase 0 — real Extension Host API integration (not native mouse drag)',
 	}
 	async function editor(content = 'alpha\n\nomega\n'): Promise<vscode.TextEditor> {
 		return vscode.window.showTextDocument(await vscode.workspace.openTextDocument({ content, language: 'plaintext' }));
-	}
-	async function undoOnce(document: vscode.TextDocument, expected: string): Promise<void> {
-		await vscode.window.showTextDocument(document, { preview: false });
-		await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
-		let notify = () => {}; const completed = new Promise<void>(resolve => { notify = resolve; });
-		const listener = vscode.workspace.onDidChangeTextDocument(event => { if (event.document === document && document.getText() === expected) { notify(); } });
-		const timeout = setTimeout(notify, 2000);
-		try { await vscode.commands.executeCommand('undo'); if (document.getText() !== expected) { await completed; } assert.equal(document.getText(), expected); }
-		finally { listener.dispose(); clearTimeout(timeout); }
 	}
 	async function drop(target: vscode.TextEditor, index: number, position: vscode.Position): Promise<vscode.DocumentDropEdit> {
 		const before = target.document.getText();

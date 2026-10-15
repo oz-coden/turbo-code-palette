@@ -31,6 +31,14 @@ publication, GitHub Release, tag or v1.0.0 promotion was performed.
 - An optional policy command accepts a contest start with timezone. Policy remains
   separate from presets; forced URL attribution is displayed and unknown transforms
   remain denied. No publication evidence service was added.
+- Initial macOS CI exposed a Unicode collision fixture that assumed the filesystem
+  could store NFC/NFD names independently. The test now exposes two distinct entries
+  through the existing reader contract on every OS; both quarantine assertions stay
+  intact. Production path/collision validation was not relaxed.
+- macOS installed-smoke startup exposed Unix socket path limits in a deeply nested
+  QA profile; non-Windows smoke profiles now use short temporary directories. A
+  Windows form-to-editor Undo harness race now waits for focus to settle and the
+  target's document-change event, still issuing exactly one Undo without retry.
 - Added changelog, user guide, known issues, pending-license notice and bundled Roslyn
   notices. Package license stays UNLICENSED: MIT is the owner's preferred candidate,
   with final grant to be reconsidered before formal release.

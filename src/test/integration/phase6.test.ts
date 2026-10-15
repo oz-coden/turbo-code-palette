@@ -1,3 +1,4 @@
+import { undoOnce } from '../editorUndo';
 import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -39,7 +40,7 @@ suite('Phase 6 — optional Roslyn in an Extension Host', () => {
 		requireHelper(this); await sandbox(async (library, provider, state) => {
 			const target = await editor('namespace N;\nclass Current {}\n'), before = target.document.getText(), asset = library.catalog.snapshot!.snippets[0]; target.selection = new vscode.Selection(1, 0, 1, 0);
 			const pipeline = new InsertionPipeline(library, state, undefined, insertIo(), api.product.comparison, provider);
-			try { assert.equal(await pipeline.run({ asset, target: capture(target), options: { attribution: 'source-urls' } }), 'inserted'); assert.match(target.document.getText(), /class Dep/); assert.match(target.document.getText(), /Source URL: https:\/\/example.com\/dep/); assert.match(target.document.getText(), /TCP License: keep/); assert.equal(state.get(`snippet:${uuid(1)}:v1.0.0`).usage, 1); await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup'); await vscode.commands.executeCommand('undo'); assert.equal(target.document.getText(), before); } finally { pipeline.dispose(); }
+			try { assert.equal(await pipeline.run({ asset, target: capture(target), options: { attribution: 'source-urls' } }), 'inserted'); assert.match(target.document.getText(), /class Dep/); assert.match(target.document.getText(), /Source URL: https:\/\/example.com\/dep/); assert.match(target.document.getText(), /TCP License: keep/); assert.equal(state.get(`snippet:${uuid(1)}:v1.0.0`).usage, 1); await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup'); await undoOnce(target.document, before); } finally { pipeline.dispose(); }
 		}, undefined, { source: [{ url: 'https://example.com/dep' }], licenseNotices: [{ text: 'keep' }] });
 	});
 	test('member overload is accepted, duplicate signature and malformed target stop before apply', async function () {

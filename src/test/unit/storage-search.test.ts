@@ -9,6 +9,7 @@ import { resolveRoots, preferredRoots, type StorageRoot } from '../../storage/ro
 import { containedPath, validateRelativePath, pathCollisionKey, readBoundedFile } from '../../storage/safePaths';
 import { writeMetadata } from '../../storage/metadataWrite';
 import { sha256 } from '../../core/assets/fingerprint';
+import { nativeReader } from '../../storage/reader';
 import { parseQuery } from '../../core/search/query';
 import { modifierSuggestions, searchAssets } from '../../core/search/index';
 
@@ -94,10 +95,15 @@ test('future metadata is readable, unverified and unavailable for semantic use',
 
 test('Unicode path collisions quarantine both conflicting member locations', async () => sandbox(async directory => {
 	const folder = await pack(directory);
-	await snippet(folder, 'é', { id: '00000000-0000-0000-0000-000000000002' });
-	await snippet(folder, 'e\u0301', { id: '00000000-0000-0000-0000-000000000003' });
+	await snippet(folder, 'First', { id: '00000000-0000-0000-0000-000000000002' });
+	await snippet(folder, 'Second', { id: '00000000-0000-0000-0000-000000000003' });
 	await snippet(folder, 'Good');
-	const snapshot = await loadCatalog([globalRoot(directory)]);
+	// APFS can fold NFC/NFD into one directory before discovery sees it. Expose
+	// two distinct fixture entries through the reader contract on every OS.
+	const snapshot = await loadCatalog([globalRoot(directory)], root => {
+		const backing = nativeReader(root), physical = (relative: string) => relative.split('/').map(part => part === 'é' ? 'First' : part === 'e\u0301' ? 'Second' : part).join('/');
+		return { verifiedFileIdentity: false, list: async relative => (await backing.list(physical(relative))).map(entry => ({ ...entry, name: entry.name === 'First' ? 'é' : entry.name === 'Second' ? 'e\u0301' : entry.name })), read: (relative, limit) => backing.read(physical(relative), limit) };
+	});
 	assert.deepEqual(snapshot.snippets.map(asset => asset.metadata.name), ['Good']);
 	assert.ok(snapshot.diagnostics.some(item => item.code === 'unsafe-or-unreadable-entry'));
 }));

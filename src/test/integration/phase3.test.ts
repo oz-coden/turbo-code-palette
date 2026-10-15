@@ -10,6 +10,7 @@ import type { AssetLocation } from '../../storage/discovery';
 import type { InsertRequest } from '../../application/insertionAdapter';
 import type { Phase0Api } from '../../extension';
 import { vscodeStore } from '../../storage/vscodeStore';
+import { undoOnce } from '../editorUndo';
 
 const uuid = (n: number) => '30000000-0000-0000-0000-' + String(n).padStart(12, '0');
 interface Definition { n: number; sources?: Record<string, string>; fields?: Record<string, unknown>; deps?: number[] }
@@ -39,17 +40,17 @@ suite('Phase 3 — one insertion pipeline in a real Extension Host', () => {
 		await sandbox([{ n: 1, deps: [2, 3] }, { n: 2, deps: [4] }, { n: 3, deps: [4] }, { n: 4 }], async (library, state) => {
 			const pipeline = new InsertionPipeline(library, state, undefined, interactions()), root = library.catalog.snapshot!.snippets.find(a => a.metadata.id === uuid(1))!, target = await editor(), before = target.document.getText();
 			assert.equal(await pipeline.run(request(root, target)), 'inserted'); assert.equal(target.document.getText(), 'before\nBODY_4\nBODY_2\nBODY_3\nBODY_1\nafter\n'); assert.equal(state.get(key(root)).usage, 1);
-			assert.equal(await pipeline.run(request(root, target)), 'already-present'); assert.equal(state.get(key(root)).usage, 1); await vscode.commands.executeCommand('undo'); assert.equal(target.document.getText(), before);
+			assert.equal(await pipeline.run(request(root, target)), 'already-present'); assert.equal(state.get(key(root)).usage, 1); await undoOnce(target.document, before);
 			assert.equal(await pipeline.run(request(root, target)), 'inserted'); assert.equal(state.get(key(root)).usage, 2); pipeline.dispose();
 		});
 	});
 	test('cycle SCC members are inserted once in UUID order and one Undo restores the document', async () => {
-		await sandbox([{ n: 2, deps: [1] }, { n: 1, deps: [2] }], async (library, state) => { const pipeline = new InsertionPipeline(library, state, undefined, interactions()), target = await editor(), before = target.document.getText(); await pipeline.run(request(library.catalog.snapshot!.snippets[0], target)); assert.equal(target.document.getText(), 'before\nBODY_1\nBODY_2\nafter\n'); await vscode.commands.executeCommand('undo'); assert.equal(target.document.getText(), before); });
+		await sandbox([{ n: 2, deps: [1] }, { n: 1, deps: [2] }], async (library, state) => { const pipeline = new InsertionPipeline(library, state, undefined, interactions()), target = await editor(), before = target.document.getText(); await pipeline.run(request(library.catalog.snapshot!.snippets[0], target)); assert.equal(target.document.getText(), 'before\nBODY_1\nBODY_2\nafter\n'); await undoOnce(target.document, before); });
 	});
 	test('templates collect one value across multiple sources, respect definitions/options/default and preserve literal replacement', async () => {
 		await sandbox([{ n: 1, sources: { 'one.txt': '{{TYPE}} {{EXTRA}}', 'two.txt': '{{TYPE}} {{EXTRA}}' }, fields: { templateVariables: [{ name: 'TYPE', default: 'long', required: false, description: 'Element type', options: ['int', 'long'] }] } }], async (library, state) => {
 			const io = interactions(), seen: string[] = []; io.input = async (_, variable) => { seen.push(variable.name); if (variable.name === 'TYPE') { assert.equal(variable.defaultValue, 'long'); assert.deepEqual(variable.options, ['int', 'long']); } return variable.defaultValue ?? '$& $1 \\'; };
-			const pipeline = new InsertionPipeline(library, state, undefined, io), target = await editor(); await pipeline.run(request(library.catalog.snapshot!.snippets[0], target, 'merge-sources')); assert.deepEqual(seen, ['EXTRA', 'TYPE']); assert.match(target.document.getText(), /long \$& \$1 \\/); await vscode.commands.executeCommand('undo'); assert.equal(target.document.getText(), 'before\n\nafter\n');
+			const pipeline = new InsertionPipeline(library, state, undefined, io), target = await editor(); await pipeline.run(request(library.catalog.snapshot!.snippets[0], target, 'merge-sources')); assert.deepEqual(seen, ['EXTRA', 'TYPE']); assert.match(target.document.getText(), /long \$& \$1 \\/); await undoOnce(target.document, 'before\n\nafter\n');
 		});
 	});
 	test('cursor, EOF, replace-selection and merge-sources all apply through the same pipeline with one Undo', async () => {
@@ -57,7 +58,7 @@ suite('Phase 3 — one insertion pipeline in a real Extension Host', () => {
 			const pipeline = new InsertionPipeline(library, state, undefined, interactions()), asset = library.catalog.snapshot!.snippets[0];
 			for (const mode of ['cursor', 'end-of-file', 'replace-selection', 'merge-sources'] as const) {
 				const target = await editor('alpha\nbeta\n'); target.selection = new vscode.Selection(1, 0, 1, 4); const before = target.document.getText(); await pipeline.run(request(asset, target, mode));
-				assert.equal(target.document.getText(), mode === 'end-of-file' ? 'alpha\nbeta\nONE\nTWO' : mode === 'replace-selection' ? 'alpha\nONE\nTWO\n' : 'alpha\nbetaONE\nTWO\n'); await vscode.commands.executeCommand('undo'); assert.equal(target.document.getText(), before);
+				assert.equal(target.document.getText(), mode === 'end-of-file' ? 'alpha\nbeta\nONE\nTWO' : mode === 'replace-selection' ? 'alpha\nONE\nTWO\n' : 'alpha\nbetaONE\nTWO\n'); await undoOnce(target.document, before);
 			}
 		});
 	});
@@ -127,7 +128,7 @@ suite('Phase 3 — one insertion pipeline in a real Extension Host', () => {
 				for (const entrance of ['inline/context', 'pack', 'command'] as const) { const target = await editor(), before = target.document.getText();
 					if (entrance === 'pack') { await api.product.showDetails(api.catalog.snapshot!.packs[0]); await api.product.panel.accept({ token: api.product.panel.session, action: 'insert', key: location }); }
 					else { await vscode.commands.executeCommand('turbo-code-palette.insert', entrance === 'command' ? row.key : location); }
-					assert.equal(target.document.getText(), 'before\nBODY_1\nafter\n'); assert.equal(api.product.insertion.lastRequest?.target?.uri.toString(), target.document.uri.toString()); assert.equal(api.product.pipeline.lastPlan?.assets[0].metadata.id, asset.metadata.id); await vscode.commands.executeCommand('undo'); assert.equal(target.document.getText(), before);
+					assert.equal(target.document.getText(), 'before\nBODY_1\nafter\n'); assert.equal(api.product.insertion.lastRequest?.target?.uri.toString(), target.document.uri.toString()); assert.equal(api.product.pipeline.lastPlan?.assets[0].metadata.id, asset.metadata.id); await undoOnce(target.document, before);
 				}
 			} finally { api.product.panel.saved(); api.product.panel.dispose(); await config.update('globalRoot', previous, vscode.ConfigurationTarget.Global); await api.product.reload(); }
 		});
@@ -143,7 +144,7 @@ suite('Phase 3 — one insertion pipeline in a real Extension Host', () => {
 	test('same template name in different Snippets stays independent and cancel/invalid options never apply a partial batch', async () => {
 		await sandbox([{ n: 1, deps: [2], sources: { 'code.txt': 'ROOT_{{NAME}}' } }, { n: 2, sources: { 'code.txt': 'DEP_{{NAME}}' }, fields: { templateVariables: [{ name: 'NAME', required: true, options: ['DEP'] }] } }], async (library, state) => {
 			const io = interactions(), target = await editor(), seen: string[] = []; io.input = async (asset, variable) => { assert.equal(variable.name, 'NAME'); seen.push(asset.metadata.name!); return asset.metadata.id === uuid(2) ? 'DEP' : 'ROOT'; }; const pipeline = new InsertionPipeline(library, state, undefined, io), root = library.catalog.snapshot!.snippets[0];
-			await pipeline.run(request(root, target)); assert.deepEqual(seen, ['Snippet-2', 'Snippet-1']); assert.match(target.document.getText(), /DEP_DEP\nROOT_ROOT/); await vscode.commands.executeCommand('undo'); const before = target.document.getText();
+			await pipeline.run(request(root, target)); assert.deepEqual(seen, ['Snippet-2', 'Snippet-1']); assert.match(target.document.getText(), /DEP_DEP\nROOT_ROOT/); await undoOnce(target.document, 'before\n\nafter\n'); const before = target.document.getText();
 			io.input = async () => 'INVALID'; await assert.rejects(pipeline.run(request(root, target)), /Invalid value/); assert.equal(target.document.getText(), before); assert.equal(state.get(key(root)).usage, 1);
 		});
 	});

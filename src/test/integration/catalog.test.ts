@@ -1,3 +1,4 @@
+import { undoOnce } from '../editorUndo';
 import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
 import type { Phase0Api } from '../../extension';
@@ -35,8 +36,7 @@ suite('Phase 1 — catalog commands and explicit Insert in a real Extension Host
 			await config.update('enabled', false, vscode.ConfigurationTarget.Global);
 			await vscode.commands.executeCommand('turbo-code-palette.insertDemo', api.tree.snippets[0]);
 			assert.equal(target.document.getText(), 'before\n' + demoSnippets[0].text + 'after\n');
-			await vscode.commands.executeCommand('undo');
-			assert.equal(target.document.getText(), 'before\nafter\n');
+			await undoOnce(target.document, 'before\nafter\n');
 		} finally { await config.update('enabled', previous, vscode.ConfigurationTarget.Global); }
 	});
 	test('public URI filesystem adapter reads the same library, enforces read bounds and keeps unverifiable locations inspection-only', async () => {
