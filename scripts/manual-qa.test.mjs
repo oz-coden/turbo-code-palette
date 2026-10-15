@@ -28,6 +28,9 @@ test('preparation creates fresh isolated runs without overwriting existing QA da
   assert.equal(config['turboCodePalette.globalRoot'], path.join(first, 'global-tutorial'));
   assert.equal(config['turboCodePalette.compliancePolicy'], 'none');
   await fs.access(path.join(first, 'reports/checklist.md')); await fs.access(path.join(first, 'variants/QA-Conflict/pack.json'));
+  const checklist = await fs.readFile(path.join(first, 'reports/checklist.md'), 'utf8');
+  for (const link of checklist.matchAll(/\[[^\]\n]+\]\(([^)\s]+)\)/g)) { await fs.access(path.resolve(first, 'reports', link[1])); }
+  assert.ok(checklist.includes('](bug-report.md)'));
 });
 
 test('synthetic baseline loads, resolves dependencies/templates and round-trips both Packs through validated ZIP', async () => {

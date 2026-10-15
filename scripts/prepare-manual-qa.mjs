@@ -1,5 +1,4 @@
 import * as fs from 'node:fs/promises';
-import { constants } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -36,8 +35,13 @@ export async function prepareManualQa() {
   await fs.cp(path.join(fixture, 'variants'), path.join(run, 'variants'), { recursive: true, errorOnExist: true, force: false });
   await fs.mkdir(path.join(run, 'extensions')); await fs.mkdir(path.join(run, 'exports')); await fs.mkdir(path.join(run, 'reports'));
   await fs.writeFile(path.join(run, 'invalid-pack.tcp-sp'), 'Synthetic QA invalid archive: deliberately not a ZIP.\n', { flag: 'wx' });
+  const guide = path.relative(path.join(run, 'reports'), path.join(repositoryReal, 'docs/ja/README.md')).split(path.sep).join('/');
   for (const [source, target] of [['manual-qa.md', 'checklist.md'], ['bug-report.md', 'bug-report.md']]) {
-    await fs.copyFile(path.join(repositoryReal, 'docs', 'ja', source), path.join(run, 'reports', target), constants.COPYFILE_EXCL);
+    const original = await fs.readFile(path.join(repositoryReal, 'docs', 'ja', source), 'utf8');
+    // The checklist lives deeper than the original. Keep its guide link usable;
+    // bug-report.md intentionally still opens the writable copy in this run.
+    const copied = source === 'manual-qa.md' ? original.replaceAll('](README.md)', `](${guide})`) : original;
+    await fs.writeFile(path.join(run, 'reports', target), copied, { flag: 'wx' });
   }
   await fs.writeFile(path.join(run, 'run.json'), JSON.stringify({ createdAt: new Date().toISOString(), fixture: 'qa/fixtures', tcpVersion: '0.0.1', executedManualTests: [] }, null, 2) + '\n', { flag: 'wx' });
   return run;

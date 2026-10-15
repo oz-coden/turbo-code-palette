@@ -15,6 +15,7 @@ Marketplace公開・GitHub Release作成も行っていません。
 
 実行時のlibrary、profile、report、archiveは`.vscode-test/manual-qa`配下でGit管理対象外です。
 fixtureそのものだけをGit管理します。fixture URL / 公開日時 / noticeは合成データであり、実際の公開証拠やTCP本体のlicenseではありません。
+コピーしたチェックリストの開始ガイドlinkはrepositoryの資料へ補正し、報告雛形はrun内の書込み用copyを開きます。そのlinkも準備テストで確認します。
 
 ## 照合した実装と説明上の注意
 
