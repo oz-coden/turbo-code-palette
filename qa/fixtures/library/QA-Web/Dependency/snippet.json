@@ -1,0 +1,13 @@
+{
+  "formatVersion": 1,
+  "id": "71000000-0000-4000-8000-000000000015",
+  "name": "QA Double",
+  "version": "v1.0.0",
+  "description": "Dependency inserted before QA Answer",
+  "languages": ["javascript"],
+  "tags": ["qa", "dependency"],
+  "sources": ["double.js"],
+  "exports": [{ "kind": "function", "name": "qaDouble" }],
+  "source": [{ "url": "https://example.com/tcp-qa/double" }],
+  "licenseNotices": [{ "text": "Synthetic QA notice: retain this text." }]
+}

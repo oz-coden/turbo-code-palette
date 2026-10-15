@@ -1,0 +1,11 @@
+{
+  "formatVersion": 1,
+  "id": "71000000-0000-4000-8000-000000000017",
+  "name": "QA Two Files",
+  "version": "v1.0.0",
+  "description": "Separate-files publishes a new folder; merge-sources uses declared order",
+  "languages": ["javascript"],
+  "tags": ["qa", "files"],
+  "sources": ["lib/message.js", "main.js"],
+  "insert": { "defaultMode": "separate-files", "allowedModes": ["separate-files", "merge-sources", "cursor", "end-of-file"] }
+}

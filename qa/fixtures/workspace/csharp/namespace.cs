@@ -1,0 +1,5 @@
+namespace QaDemo;
+
+class App
+{
+}

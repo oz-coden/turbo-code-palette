@@ -1,0 +1,8 @@
+{
+  "formatVersion": 1,
+  "id": "71000000-0000-4000-8000-000000000002",
+  "name": "QA Optional CSharp",
+  "version": "v1.0.0",
+  "description": "Optional Roslyn checks; not needed for general TCP QA",
+  "tags": ["qa", "csharp"]
+}

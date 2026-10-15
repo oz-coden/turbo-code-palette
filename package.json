@@ -456,6 +456,8 @@
     "lint": "eslint src",
     "test": "vscode-test",
     "test:unit": "npm run compile-tests && node --test out/test/unit/*.test.js scripts/public-repo-rules.test.mjs",
+    "check:docs": "node scripts/check-docs.mjs",
+    "test:manual-qa": "npm run compile-tests && node --test scripts/manual-qa.test.mjs",
     "test:host": "npm run compile-tests && npm run compile && node scripts/run-host-tests.mjs",
     "dev:host": "npm run compile && node scripts/launch-dev-host.mjs",
     "check-public": "node scripts/check-public-repo.mjs",

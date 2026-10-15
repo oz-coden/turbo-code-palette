@@ -1,0 +1,12 @@
+{
+  "formatVersion": 1,
+  "id": "71000000-0000-4000-8000-000000000019",
+  "name": "QA CSharp Member",
+  "version": "v1.0.0",
+  "description": "A nested helper type placed as a member of an existing type",
+  "languages": ["csharp"],
+  "tags": ["qa", "csharp"],
+  "sources": ["member.cs"],
+  "exports": [{ "kind": "class", "name": "QaNestedHelper" }],
+  "insert": { "defaultMode": "structure-aware", "allowedModes": ["structure-aware"], "targets": ["member"] }
+}

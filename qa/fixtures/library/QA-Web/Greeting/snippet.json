@@ -1,0 +1,13 @@
+{
+  "formatVersion": 1,
+  "id": "71000000-0000-4000-8000-000000000011",
+  "name": "QA Greeting",
+  "version": "v1.0.0",
+  "description": "Plain JavaScript function, no helper required",
+  "languages": ["javascript"],
+  "tags": ["qa", "greeting"],
+  "sources": ["greet.js"],
+  "exports": [{ "kind": "function", "name": "qaGreet", "qaHint": "keep this child field" }],
+  "insert": { "defaultMode": "cursor" },
+  "qaExtension": { "preserveMe": true }
+}

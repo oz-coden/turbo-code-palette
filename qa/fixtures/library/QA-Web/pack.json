@@ -1,0 +1,9 @@
+{
+  "formatVersion": 1,
+  "id": "71000000-0000-4000-8000-000000000001",
+  "name": "QA Web Components",
+  "version": "v1.0.0",
+  "description": "Synthetic JavaScript, Python and HTML manual QA assets",
+  "tags": ["qa", "web"],
+  "qaExtension": { "preserveMe": true }
+}

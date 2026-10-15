@@ -1,0 +1,15 @@
+{
+  "formatVersion": 1,
+  "id": "71000000-0000-4000-8000-000000000018",
+  "name": "QA CSharp Dep",
+  "version": "v1.0.0",
+  "description": "Namespace/type placement and a known semantic Bundle export",
+  "languages": ["csharp"],
+  "tags": ["qa", "csharp"],
+  "sources": ["Dep.cs"],
+  "exports": [{ "kind": "class", "name": "Dep" }],
+  "insert": { "defaultMode": "structure-aware", "allowedModes": ["structure-aware", "cursor"], "targets": ["namespace"] },
+  "source": [{ "url": "https://example.com/tcp-qa/csharp-dep", "publication": "public", "publishedAt": "2026-10-01T00:00:00Z" }],
+  "provenance": { "aiUsage": "used", "qaOnly": true },
+  "licenseNotices": [{ "text": "Synthetic CSharp QA notice: retain this text." }]
+}

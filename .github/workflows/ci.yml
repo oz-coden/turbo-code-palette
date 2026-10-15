@@ -30,6 +30,8 @@ jobs:
       - run: npm run check-public -- --history
       - run: npm run compile
       - run: npm run test:unit
+      - run: npm run check:docs
+      - run: npm run test:manual-qa
       - run: npm run measure:csharp
 
   extension-host:

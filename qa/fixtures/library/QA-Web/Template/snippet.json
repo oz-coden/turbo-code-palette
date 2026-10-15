@@ -1,0 +1,14 @@
+{
+  "formatVersion": 1,
+  "id": "71000000-0000-4000-8000-000000000014",
+  "name": "QA Named Template",
+  "version": "v1.0.0",
+  "description": "One NAME input is reused twice; VALUE uses literal replacement",
+  "languages": ["javascript"],
+  "tags": ["qa", "template"],
+  "sources": ["template.js"],
+  "templateVariables": [
+    { "name": "NAME", "required": true, "default": "qaMessage", "description": "JavaScript identifier; review the result" },
+    { "name": "VALUE", "required": true, "default": "hello", "options": ["hello", "$&"], "description": "Literal text, not a regex replacement" }
+  ]
+}

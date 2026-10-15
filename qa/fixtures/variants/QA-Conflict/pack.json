@@ -1,0 +1,7 @@
+{
+  "formatVersion": 1,
+  "id": "71000000-0000-4000-8000-000000000003",
+  "name": "QA Intentional Conflict",
+  "version": "v1.0.0",
+  "description": "Do not load until the explicit conflict test"
+}

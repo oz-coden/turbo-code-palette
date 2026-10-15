@@ -27,6 +27,7 @@ Ordinary Insert stays one action unless template/conflict/input is needed. Advan
 
 ## Documentation
 
+- [日本語ガイド・インストール・手動QA](https://github.com/oz-coden/turbo-code-palette/blob/main/docs/ja/README.md)
 - [User Guide / Quick Start](docs/user-guide.md)
 - [Known issues / release gates](docs/known-issues.md)
 - [Changelog](CHANGELOG.md), [third-party notices](THIRD_PARTY_NOTICES.md)

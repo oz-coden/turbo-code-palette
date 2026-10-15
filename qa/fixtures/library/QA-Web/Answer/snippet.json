@@ -1,0 +1,17 @@
+{
+  "formatVersion": 1,
+  "id": "71000000-0000-4000-8000-000000000016",
+  "name": "QA Answer",
+  "version": "v1.0.0",
+  "description": "Depends on QA Double; includes a duplicate synthetic license notice",
+  "languages": ["javascript"],
+  "tags": ["qa", "dependency", "attribution"],
+  "authors": [{ "name": "Synthetic QA Author", "qaField": true }],
+  "sources": ["answer.js"],
+  "exports": [{ "kind": "function", "name": "qaAnswer" }],
+  "dependencies": [{ "id": "71000000-0000-4000-8000-000000000015", "name": "QA Double", "version": ">=v1.0.0 <v2.0.0" }],
+  "source": [{ "url": "https://example.com/tcp-qa/answer", "publication": "public", "publishedAt": "2026-10-01T00:00:00Z" }],
+  "repository": [{ "url": "https://example.com/tcp-qa/repository-not-a-citation" }],
+  "provenance": { "aiUsage": "unknown", "qaOnly": true },
+  "licenseNotices": [{ "text": "Synthetic QA notice: retain this text." }]
+}

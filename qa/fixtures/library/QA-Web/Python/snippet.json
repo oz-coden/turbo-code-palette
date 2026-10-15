@@ -1,0 +1,11 @@
+{
+  "formatVersion": 1,
+  "id": "71000000-0000-4000-8000-000000000012",
+  "name": "QA Python Greeting",
+  "version": "v1.0.0",
+  "description": "Plain Python function",
+  "languages": ["python"],
+  "tags": ["qa", "greeting"],
+  "sources": ["greet.py"],
+  "exports": [{ "kind": "function", "name": "qa_greet" }]
+}

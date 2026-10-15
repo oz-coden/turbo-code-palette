@@ -1,0 +1,10 @@
+{
+  "formatVersion": 1,
+  "id": "71000000-0000-4000-8000-000000000013",
+  "name": "QA HTML Card",
+  "version": "v1.0.0",
+  "description": "Reusable accessible HTML fragment",
+  "languages": ["html"],
+  "tags": ["qa", "card"],
+  "sources": ["card.html"]
+}

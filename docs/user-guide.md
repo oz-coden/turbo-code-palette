@@ -1,5 +1,7 @@
 # User guide
 
+[日本語の使い方・チュートリアル・手動QA](https://github.com/oz-coden/turbo-code-palette/blob/main/docs/ja/README.md)
+
 Turbo Code Palette manages reusable code as Snippets and Packs across languages
 and uses. Its core needs VS Code, not .NET or a contest policy. This development
 snapshot is version 0.0.1; Marketplace publication and a formal release are pending.
