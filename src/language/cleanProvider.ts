@@ -6,6 +6,7 @@ export class CleanProviders {
 	private readonly providers = new Map<string, CleanLanguageProvider>();
 	private revision = 0;
 	get generation(): number { return this.revision; }
+	has(language: string): boolean { return this.providers.has(language); }
 	register(language: string, provider: CleanLanguageProvider): { dispose(): void } {
 		if (this.providers.has(language)) { throw new Error('A Clean Copy provider is already registered for this language.'); }
 		this.providers.set(language, provider); this.revision++; return { dispose: () => { if (this.providers.get(language) === provider) { this.providers.delete(language); this.revision++; } } };

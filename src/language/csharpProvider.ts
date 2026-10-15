@@ -2,12 +2,19 @@ import type { CleanLanguageProvider } from '../core/clean/types';
 import { CSharpClient } from './csharpClient';
 
 export class CSharpProvider {
+	readonly id = 'csharp-roslyn-v1';
+	readonly languages = new Set(['csharp']);
 	constructor(readonly client: CSharpClient, readonly policy: () => 'none' | 'atcoder-20261014' = () => 'none') {}
 	get configured(): boolean { return this.client.configured; }
+	async availability(): Promise<{ available: boolean; reason: string }> {
+		if (!this.configured) { return { available: false, reason: this.client.status }; }
+		try { await this.analyze(['class TcpProviderProbe {}']); return { available: true, reason: this.client.status }; }
+		catch { return { available: false, reason: this.client.status + ' Basic TCP remains available. Install .NET 10 manually or disable the optional provider; TCP never installs a runtime.' }; }
+	}
 	async analyze(sources: readonly string[]) { return this.client.request('analyze', sources.map((source, i) => ({ id: 'source-' + i + '.cs', source }))); }
 	async validate(source: string): Promise<string[]> { const response = await this.client.request('validate', [{ id: 'target.cs', source }]); return response.diagnostics; }
 	async place(source: string, incoming: string, offset: number, targets: readonly string[]) { return this.client.request('place', [{ id: 'target.cs', source }], { source: incoming, offset, targets }); }
-	async header(source: string, notices: readonly string[], urls: readonly string[]): Promise<string> { return (await this.client.request('header', [{ id: 'output.cs', source }], { notices, urls })).result.text; }
+	async header(source: string, notices: readonly string[], urls: readonly string[], details: readonly string[] = []): Promise<string> { return (await this.client.request('header', [{ id: 'output.cs', source }], { notices, urls, details })).result.text; }
 	async markers(source: string) { return (await this.client.request('markers', [{ id: 'target.cs', source }])).result.markers; }
 	cleanProvider(): CleanLanguageProvider {
 		const transforms = [

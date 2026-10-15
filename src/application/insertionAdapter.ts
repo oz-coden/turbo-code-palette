@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import type { AssetLocation } from '../storage/discovery';
 import type { InsertMode } from '../core/insertion/modes';
-export interface InsertRequest { readonly asset: AssetLocation; readonly mode?: InsertMode | 'choose'; readonly target?: { readonly uri: vscode.Uri; readonly version: number; readonly selection: vscode.Selection } }
+import type { InsertOptions } from '../core/insertion/options';
+export interface InsertRequest { readonly asset: AssetLocation; readonly mode?: InsertMode | 'choose'; readonly options?: Partial<InsertOptions>; readonly target?: { readonly uri: vscode.Uri; readonly version: number; readonly selection: vscode.Selection } }
 export class InsertionAdapter implements vscode.Disposable {
 	private target?: InsertRequest['target'];
 	private readonly subscriptions: vscode.Disposable[];
@@ -21,8 +22,8 @@ export class InsertionAdapter implements vscode.Disposable {
 		if (doc && this.target && doc.version === this.target.version) { return this.target; }
 		return undefined;
 	}
-	async request(asset: AssetLocation, mode?: InsertRequest['mode'], target = this.capture()): Promise<void> {
-		this.lastRequest = { asset, target, mode };
+	async request(asset: AssetLocation, mode?: InsertRequest['mode'], target = this.capture(), options?: Partial<InsertOptions>): Promise<void> {
+		this.lastRequest = { asset, target, mode, options };
 		if (this.handler) { await this.handler(this.lastRequest); }
 		else { void vscode.window.showInformationMessage('Insert is prepared for Phase 3. The insertion pipeline is not installed yet.'); }
 	}

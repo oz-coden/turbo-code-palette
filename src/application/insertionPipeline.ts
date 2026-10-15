@@ -17,10 +17,10 @@ import type { UserState } from './userState';
 import { ConflictError } from '../core/conflict';
 import { markSource, markerEvidence, sourceLanguage } from '../language/sourceMarker';
 import { ComparisonDocuments } from '../ui/comparison';
-import type { CSharpProvider } from '../language/csharpProvider';
-import { collectNotices } from '../core/clean/pipeline';
-import { attribution, type CompliancePolicy } from '../core/compliance';
-import { attachAttribution } from '../language/attribution';
+import type { InsertionLanguageProvider } from '../language/provider';
+import type { CompliancePolicy } from '../core/compliance';
+import { attachAttribution, collectAttribution } from '../language/attribution';
+import { resolveInsertOptions } from '../core/insertion/options';
 
 export interface InsertionInteractions {
 	input(asset: AssetLocation, variable: Variable): Promise<string | undefined>;
@@ -33,7 +33,7 @@ export interface InsertionPlan {
 	readonly assets: readonly AssetLocation[]; readonly skipped: readonly AssetLocation[]; readonly warnings: readonly string[];
 	readonly edits: readonly OffsetEdit[]; readonly output?: FileOutput; readonly before: string; readonly after: string;
 }
-interface Implementation { readonly signature: string; readonly version: AssetVersion; readonly body: string }
+interface Implementation { readonly signature: string; readonly version: AssetVersion; readonly body: string; readonly asset: AssetLocation; readonly packMetadata: AssetLocation['metadata']['document'] }
 interface Receipt { readonly text: string; readonly implementations: Map<string, Implementation>; readonly ambiguous: ReadonlySet<string> }
 const signature = (asset: AssetLocation) => `${asset.metadata.version!.text}:${asset.semanticHash}`;
 const decoder = new TextDecoder('utf-8', { fatal: true });
@@ -46,7 +46,7 @@ export class InsertionPipeline implements vscode.Disposable {
 	readonly interactions: InsertionInteractions;
 	lastPlan?: InsertionPlan;
 	private comparison?: ComparisonDocuments;
-	constructor(private readonly library: Library, private readonly state: UserState, private readonly rootGuard: () => void = () => {}, interactions?: InsertionInteractions, private readonly sharedComparison?: ComparisonDocuments, private readonly csharp?: CSharpProvider) {
+	constructor(private readonly library: Library, private readonly state: UserState, private readonly rootGuard: () => void = () => {}, interactions?: InsertionInteractions, private readonly sharedComparison?: ComparisonDocuments, private readonly languageProvider?: InsertionLanguageProvider) {
 		this.comparison = sharedComparison;
 		this.interactions = interactions ?? {
 			input: async (asset, variable) => {
@@ -99,13 +99,16 @@ export class InsertionPipeline implements vscode.Disposable {
 		try {
 			this.rootGuard(); const snapshot = this.library.catalog.snapshot, stamp = rootStamp(this.library), document = await this.validateTarget(request);
 			const config = vscode.workspace.getConfiguration('turboCodePalette'), policy = config.get<CompliancePolicy>('compliancePolicy', 'none');
-			const settingsStamp = (c: vscode.WorkspaceConfiguration) => JSON.stringify(['compliancePolicy', 'atcoderContestStartsAt', 'csharpHelperPath', 'csharpLanguageVersion', 'csharpDefines'].map(key => c.get(key))), policyStamp = settingsStamp(config);
-			const roslyn = document.languageId === 'csharp' && this.csharp?.configured ? this.csharp : undefined;
+			const settingsStamp = (c: vscode.WorkspaceConfiguration) => JSON.stringify(['compliancePolicy', 'atcoderContestStartsAt', 'csharpHelperPath', 'csharpProvider', 'csharpLanguageVersion', 'csharpDefines', 'sourceAttribution', 'sourceMarkers', 'previewBeforeInsert'].map(key => c.get(key))), policyStamp = settingsStamp(config);
+			const resolved = resolveInsertOptions({ attribution: config.get('sourceAttribution', 'none'), identityMarkers: config.get('sourceMarkers', false), preview: config.get('previewBeforeInsert', false) }, request.options, policy);
+			let semantic: InsertionLanguageProvider | undefined, unavailable = '';
 			if (!snapshot || !snapshot.snippets.some(asset => locationKey(asset) === locationKey(request.asset) && asset.integrityHash === request.asset.integrityHash)) { throw new Error('Asset is no longer in the catalog. Reload and select again.'); }
 			const root = request.asset, pack = snapshot.packs.find(asset => sameRoot(asset.root, root.root) && asset.relativePath === packOf(root));
 			if (!pack?.usable) { throw new Error('Pack is not eligible for insertion.'); }
 			const closure = resolveClosure([root], this.library.members(pack), { workspaceId: root.root.workspaceId, strictConflicts: true });
 			const ordered = dependencyOrder(closure.members);
+			const wantsStructure = request.mode === 'structure-aware' || request.mode === 'choose' || ordered.some(asset => asset.metadata.document.string(['insert', 'defaultMode']) === 'structure-aware');
+			if (wantsStructure && this.languageProvider?.languages.has(document.languageId)) { const state = await this.languageProvider.availability(); if (state.available) { semantic = this.languageProvider; } else { unavailable = state.reason; } }
 			for (const asset of ordered) {
 				const conflicts = snapshot.snippets.filter(other => other.metadata.id === asset.metadata.id && other.metadata.version!.text === asset.metadata.version!.text && other.semanticHash !== asset.semanticHash);
 				if (conflicts.length) { throw new ConflictError('Same UUID/version has different content. Conflict comparison is required before insertion.', { incoming: asset, existing: conflicts }); }
@@ -113,8 +116,8 @@ export class InsertionPipeline implements vscode.Disposable {
 			await this.assets(ordered);
 			const before = document.getText(), uri = document.uri.toString(), history = this.receipts.get(uri) ?? [], verified = [...history].reverse().find(receipt => receipt.text === before);
 			if (before.length > 16 * 1024 * 1024) { throw new Error('Target text limit exceeded.'); }
-			const markers = roslyn ? await roslyn.markers(before) : markerEvidence(before, document.languageId);
-			const skipped: AssetLocation[] = [], items: { asset: AssetLocation; mode: InsertMode; sources: string[] }[] = [], warnings = [...closure.warnings];
+			const markers = semantic ? await semantic.markers(before) : markerEvidence(before, document.languageId);
+			const skipped: AssetLocation[] = [], items: { asset: AssetLocation; mode: InsertMode; sources: string[] }[] = [], warnings = [...closure.warnings, ...resolved.forced];
 			const canSkip = (asset: AssetLocation) => {
 				const receipt = verified?.implementations.get(asset.metadata.id!); if (!receipt) { return false; }
 				if (receipt.signature === signature(asset)) { return true; }
@@ -133,10 +136,10 @@ export class InsertionPipeline implements vscode.Disposable {
 				const variables = templateInputs(asset.metadata.document, raw), values = new Map<string, string>();
 				for (const variable of variables) { const value = await this.interactions.input(asset, variable); if (value === undefined) { return 'cancelled'; } validateValue(variable, value); values.set(variable.name, value); }
 				const sources = raw.map(source => substitute(source, variables, values));
-				const policy = modePolicy(asset.metadata.document, { structure: !!roslyn || supportsStructure(document.languageId, asset.metadata.document), files: !!vscode.workspace.workspaceFolders?.some(folder => folder.uri.scheme === 'file') });
-				if (!policy.available.length) { throw new Error('No available insertion mode for this asset/target. C# structure-aware requires the optional semantic provider.'); }
+				const policy = modePolicy(asset.metadata.document, { structure: !!semantic || supportsStructure(document.languageId, asset.metadata.document), files: !!vscode.workspace.workspaceFolders?.some(folder => folder.uri.scheme === 'file') });
+				if (!policy.available.length) { throw new Error('No available insertion mode for this asset/target. ' + (unavailable || 'Structure-aware requires a compatible language provider.')); }
 				let mode: InsertMode | undefined;
-				if (asset === root && request.mode && request.mode !== 'choose') { if (!policy.available.includes(request.mode)) { throw new Error('Requested mode is denied or unsupported.'); } mode = request.mode; }
+				if (asset === root && request.mode && request.mode !== 'choose') { if (!policy.available.includes(request.mode)) { throw new Error('Requested mode is denied or unsupported. ' + unavailable); } mode = request.mode; }
 				else { mode = asset === root && request.mode === 'choose' ? undefined : policy.preferred; }
 				if (!mode) { mode = await this.interactions.mode(asset, policy.available); if (!mode) { return 'cancelled'; } }
 				if (!policy.available.includes(mode)) { throw new Error('Unsupported/denied insertion mode.'); }
@@ -144,12 +147,12 @@ export class InsertionPipeline implements vscode.Disposable {
 				items.push({ asset, mode, sources });
 			}
 			if (!items.length) { return 'already-present'; }
-			try { validateCollisions(before, items.filter(item => item.mode !== 'separate-files').map(item => ({ name: item.asset.metadata.name!, exports: roslyn ? [] : exportNames(item.asset.metadata.document), sources: item.sources }))); }
+			try { validateCollisions(before, items.filter(item => item.mode !== 'separate-files').map(item => ({ name: item.asset.metadata.name!, exports: semantic ? [] : exportNames(item.asset.metadata.document), sources: item.sources }))); }
 			catch (error) { throw new ConflictError((error as Error).message, { currentText: before, requestedText: items.flatMap(item => item.sources).join('\n') }); }
 			// A single implementation cannot introduce duplicate declared exports in this batch either.
-			try { validateCollisions('', items.filter(item => !roslyn || item.mode === 'separate-files').map(item => ({ name: item.asset.metadata.name!, exports: exportNames(item.asset.metadata.document), sources: [] }))); }
+			try { validateCollisions('', items.filter(item => !semantic || item.mode === 'separate-files').map(item => ({ name: item.asset.metadata.name!, exports: exportNames(item.asset.metadata.document), sources: [] }))); }
 			catch (error) { throw new ConflictError((error as Error).message, { currentText: before, requestedText: items.flatMap(item => item.sources).join('\n') }); }
-			if (vscode.workspace.getConfiguration('turboCodePalette').get<boolean>('sourceMarkers', false)) {
+			if (resolved.options.identityMarkers) {
 				const eol = document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n', selection = request.target!.selection;
 				for (const item of items) {
 					const identity = { id: item.asset.metadata.id!, version: item.asset.metadata.version!.text };
@@ -170,35 +173,53 @@ export class InsertionPipeline implements vscode.Disposable {
 				output = { ...destination, files }; this.validateOutputRoot(output); await validateDestination(output);
 			} else {
 				const selection = request.target!.selection;
-				if (roslyn && items.some(item => item.mode === 'structure-aware')) {
-					if (items.some(item => item.mode !== 'structure-aware')) { throw new Error('C# structural and offset modes cannot be mixed in one plan. Select compatible modes for the closure.'); }
+				if (semantic && items.some(item => item.mode === 'structure-aware')) {
+					if (items.some(item => item.mode !== 'structure-aware')) { throw new Error('Structural and offset modes cannot be mixed in one semantic plan. Select compatible modes for the closure.'); }
 					let planned = before;
 					// Dependency order is retained at a common boundary by planning the batch as one fragment.
 					const targets = items.map(item => (item.asset.metadata.document.node(['insert', 'targets'])?.children ?? []).map(node => node.value as string));
 					const common = targets[0].filter(target => targets.every(list => list.includes(target)));
-					const placed = await roslyn.place(planned, items.flatMap(item => item.sources).join('\n'), document.offsetAt(selection.active), common); warnings.push(...placed.diagnostics);
+					const placed = await semantic.place(planned, items.flatMap(item => item.sources).join('\n'), document.offsetAt(selection.active), common); warnings.push(...placed.diagnostics);
 					if (placed.result.offset > before.length) { throw new Error('Invalid C# placement response.'); }
 					planned = planned.slice(0, placed.result.offset) + placed.result.text + planned.slice(placed.result.offset); edits = [{ start: 0, end: before.length, text: planned }];
 				} else { edits = planText(before, { start: document.offsetAt(selection.start), end: document.offsetAt(selection.end), active: document.offsetAt(selection.active) }, items, document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n'); }
 			}
-			const origins = attribution(items.map(item => item.asset.metadata.document), policy, config.get<string>('atcoderContestStartsAt')); warnings.push(...origins.warnings);
-			const notices = collectNotices([...items.map(item => item.asset.metadata.document), pack.metadata.document]);
+			// Reused dependencies still need their actual revision's citations/notices.
+			// A resolver-selected newer compatible revision is not evidence of the origin
+			// of code already inserted from a different Pack/revision.
+			const originAssets = new Map(items.map(item => [item.asset.metadata.id!, item.asset]));
+			const reused = new Set<string>();
+			const historicalPackNotices: AssetLocation['metadata']['document'][] = [];
+			const includeReused = (id: string) => {
+				if (reused.has(id)) { return; } reused.add(id);
+				const receipt = verified?.implementations.get(id);
+				if (!receipt || verified?.ambiguous.has(id)) { throw new ConflictError('Existing dependency origin cannot be verified. Compare before insertion.', { currentText: before }); }
+				const other = originAssets.get(id); if (other && signature(other) !== receipt.signature) { throw new ConflictError('Existing dependency revision conflicts with this plan. Compare before insertion.', { currentText: before }); }
+				originAssets.set(id, receipt.asset);
+				historicalPackNotices.push(receipt.packMetadata);
+				for (const dependency of receipt.asset.metadata.dependencies) { const child = verified?.implementations.get(dependency.id); if (!child || !satisfies(child.version, dependency.constraint)) { throw new ConflictError('Existing dependency closure cannot be verified. Compare before insertion.', { currentText: before }); } includeReused(dependency.id); }
+			};
+			for (const asset of skipped) { includeReused(asset.metadata.id!); }
+			const attributionAssets = [...originAssets.values()], originPacks = [...new Set(attributionAssets.map(asset => snapshot.packs.find(pack => sameRoot(pack.root, asset.root) && pack.relativePath === packOf(asset))!))];
+			if (originPacks.some(pack => !pack)) { throw new Error('Existing dependency origin Pack is no longer loaded. Reload before insertion.'); }
+			await this.assets(attributionAssets);
+			const origins = collectAttribution(attributionAssets.map(asset => asset.metadata.document), [...attributionAssets, ...originPacks].map(asset => asset.metadata.document).concat(historicalPackNotices), resolved.options.attribution, policy, config.get<string>('atcoderContestStartsAt')); warnings.push(...origins.warnings);
 			let after = applyText(before, edits);
-			if (output) { const files = new Map<string, string>(); for (const [name, source] of output.files) { files.set(name, await attachAttribution(source, sourceLanguage(name), notices, origins.urls, this.csharp)); } output = { ...output, files }; }
+			if (output) { const files = new Map<string, string>(); for (const [name, source] of output.files) { files.set(name, await attachAttribution(source, sourceLanguage(name), origins.notices, origins.urls, semantic, origins.details)); } output = { ...output, files }; }
 			else {
-				after = await attachAttribution(after, document.languageId, notices, origins.urls, this.csharp); if (after !== applyText(before, edits)) { edits = [{ start: 0, end: before.length, text: after }]; }
-				if (roslyn) { try { warnings.push(...await roslyn.validate(after)); } catch (error) { throw new ConflictError('C# syntax/binding/collision validation stopped the plan: ' + (error as Error).message, { currentText: before, requestedText: after }); } }
+				after = await attachAttribution(after, document.languageId, origins.notices, origins.urls, semantic, origins.details); if (after !== applyText(before, edits)) { edits = [{ start: 0, end: before.length, text: after }]; }
+				if (semantic) { try { warnings.push(...await semantic.validate(after)); } catch (error) { throw new ConflictError('Language syntax/binding/collision validation stopped the plan: ' + (error as Error).message, { currentText: before, requestedText: after }); } }
 			}
 			if (after.length > 32 * 1024 * 1024) { throw new Error('Planned text limit exceeded.'); }
 			const plan: InsertionPlan = { assets: items.map(item => item.asset), skipped, warnings, edits, output, before, after }; this.lastPlan = plan;
 			if (warnings.length) { const confirmed = this.interactions.warnings ? await this.interactions.warnings(warnings) : await vscode.window.showWarningMessage(warnings.join('\n'), { modal: true }, 'Continue') === 'Continue'; if (!confirmed) { return 'cancelled'; } }
-			if (vscode.workspace.getConfiguration('turboCodePalette').get<boolean>('previewBeforeInsert', false) && !await this.interactions.preview(plan)) { return 'cancelled'; }
+			if (resolved.options.preview && !await this.interactions.preview(plan)) { return 'cancelled'; }
 			// Show/reacquire the captured editor before final validation, never use current focus as a target.
 			const editor = output ? undefined : await vscode.window.showTextDocument(document, { preview: false });
 			const revalidate = async () => {
 				const current = vscode.workspace.getConfiguration('turboCodePalette'); if (policyStamp !== settingsStamp(current)) { throw new Error('Compliance policy / C# options changed while planning. Insert again.'); }
 				this.rootGuard(); if (rootStamp(this.library) !== stamp || this.library.catalog.snapshot !== snapshot) { throw new Error('Catalog/root changed while planning. Insert again.'); }
-				await this.assets(ordered); await this.validateTarget(request);
+				await this.assets([...ordered, ...attributionAssets]); await this.validateTarget(request);
 				if (document.getText() !== before) { throw new Error('Target changed while planning. Insert again.'); }
 				if (output) { this.validateOutputRoot(output); }
 				this.rootGuard(); if (this.library.catalog.snapshot !== snapshot || rootStamp(this.library) !== stamp) { throw new Error('Catalog/root changed while validating.'); }
@@ -215,7 +236,7 @@ export class InsertionPipeline implements vscode.Disposable {
 					if (start < 0 || before.indexOf(receipt.body, start + 1) >= 0 || edits.some(edit => edit.start < end && edit.end > start || edit.start === edit.end && edit.start > start && edit.start < end)) { implementations.delete(id); ambiguous.add(id); }
 				}
 				const eol = document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n';
-				for (const item of items) { const body = item.sources.map(source => source.replace(/\r\n|\r|\n/g, eol)).join(eol); if (after.indexOf(body) >= 0 && after.indexOf(body, after.indexOf(body) + 1) < 0) { implementations.set(item.asset.metadata.id!, { signature: signature(item.asset), version: item.asset.metadata.version!, body }); ambiguous.delete(item.asset.metadata.id!); } else { ambiguous.add(item.asset.metadata.id!); } }
+				for (const item of items) { const body = item.sources.map(source => source.replace(/\r\n|\r|\n/g, eol)).join(eol); if (after.indexOf(body) >= 0 && after.indexOf(body, after.indexOf(body) + 1) < 0) { implementations.set(item.asset.metadata.id!, { signature: signature(item.asset), version: item.asset.metadata.version!, body, asset: item.asset, packMetadata: snapshot.packs.find(pack => sameRoot(pack.root, item.asset.root) && pack.relativePath === packOf(item.asset))!.metadata.document }); ambiguous.delete(item.asset.metadata.id!); } else { ambiguous.add(item.asset.metadata.id!); } }
 				if (!history.some(receipt => receipt.text === before)) { history.push({ text: before, implementations: new Map(), ambiguous: new Set(ambiguous) }); }
 				history.push({ text: after, implementations, ambiguous }); this.receipts.set(uri, history.slice(-8));
 				while (this.receipts.size > 32 || [...this.receipts.values()].flat().reduce((bytes, receipt) => bytes + receipt.text.length * 2, 0) > 64 * 1024 * 1024) { this.receipts.delete(this.receipts.keys().next().value!); }

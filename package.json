@@ -1,7 +1,7 @@
 {
   "name": "turbo-code-palette",
   "displayName": "Turbo Code Palette",
-  "description": "A fast, visual snippet palette designed to supercharge competitive programming workflows.",
+  "description": "Manage, search, share and reuse code Snippets and Packs across programming languages.",
   "version": "0.0.1",
   "publisher": "oz-coden",
   "engines": {
@@ -17,12 +17,31 @@
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
-      {"command":"turbo-code-palette.csharpProviderStatus","title":"Turbo Code Palette: C# Provider Status"},
-      {"command":"turbo-code-palette.cancelCsharpOperation","title":"Turbo Code Palette: Cancel Current C# Operation"},
-      { "command": "turbo-code-palette.cleanCopy", "title": "Turbo Code Palette: Clean Copy", "icon": "$(copy)" },
-      {"command":"turbo-code-palette.importPack","title":"Turbo Code Palette: Import Pack (.tcp-sp)"},
-      {"command":"turbo-code-palette.exportPack","title":"Turbo Code Palette: Export Pack (.tcp-sp)"},
-      {"command":"turbo-code-palette.compare","title":"Turbo Code Palette: Compare Asset Revisions / Locations"},
+      {
+        "command": "turbo-code-palette.csharpProviderStatus",
+        "title": "Turbo Code Palette: C# Provider Status"
+      },
+      {
+        "command": "turbo-code-palette.cancelCsharpOperation",
+        "title": "Turbo Code Palette: Cancel Current C# Operation"
+      },
+      {
+        "command": "turbo-code-palette.cleanCopy",
+        "title": "Turbo Code Palette: Clean Copy",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "turbo-code-palette.importPack",
+        "title": "Turbo Code Palette: Import Pack (.tcp-sp)"
+      },
+      {
+        "command": "turbo-code-palette.exportPack",
+        "title": "Turbo Code Palette: Export Pack (.tcp-sp)"
+      },
+      {
+        "command": "turbo-code-palette.compare",
+        "title": "Turbo Code Palette: Compare Asset Revisions / Locations"
+      },
       {
         "command": "turbo-code-palette.reloadCatalog",
         "title": "Turbo Code Palette: Reload Library",
@@ -49,25 +68,108 @@
         "command": "turbo-code-palette.showDiagnostics",
         "title": "Turbo Code Palette: Show Phase 0 Diagnostics"
       },
-      { "command": "turbo-code-palette.searchPacks", "title": "Turbo Code Palette: Search Packs", "icon": "$(search)" },
-      { "command": "turbo-code-palette.details", "title": "Turbo Code Palette: Show Details" },
-      { "command": "turbo-code-palette.edit", "title": "Turbo Code Palette: Edit Metadata", "icon": "$(edit)" },
-      { "command": "turbo-code-palette.newSnippet", "title": "Turbo Code Palette: New Snippet", "icon": "$(add)" },
-      { "command": "turbo-code-palette.createSelection", "title": "Turbo Code Palette: Create Snippet from Selection" },
-      { "command": "turbo-code-palette.createFile", "title": "Turbo Code Palette: Create Snippet from Current File" },
-      { "command": "turbo-code-palette.createPack", "title": "Turbo Code Palette: Create Pack", "icon": "$(add)" },
-      { "command": "turbo-code-palette.copyWorkspace", "title": "Turbo Code Palette: Copy to Workspace" },
-      { "command": "turbo-code-palette.copyGlobal", "title": "Turbo Code Palette: Copy to Global" },
-      { "command": "turbo-code-palette.delete", "title": "Turbo Code Palette: Delete", "icon": "$(trash)" },
-      { "command": "turbo-code-palette.favorite", "title": "Turbo Code Palette: Toggle Favorite", "icon": "$(star-empty)" },
-      { "command": "turbo-code-palette.filter", "title": "Turbo Code Palette: All / Favorites / Recent", "icon": "$(filter)" },
-      { "command": "turbo-code-palette.insert", "title": "Turbo Code Palette: Insert Snippet", "shortTitle": "Default Mode", "icon": "$(arrow-right)" },
-      { "command": "turbo-code-palette.insertWithMode", "title": "Turbo Code Palette: Insert Snippet with Mode…", "shortTitle": "Choose Mode…" },
-      { "command": "turbo-code-palette.upgrade", "title": "Turbo Code Palette: Upgrade Metadata Format" },
-      { "command": "turbo-code-palette.openGlobalFolder", "title": "Turbo Code Palette: Open Global Library Folder" },
-      { "command": "turbo-code-palette.revealGlobalFolder", "title": "Turbo Code Palette: Reveal Global Library" },
-      { "command": "turbo-code-palette.configureGlobalRoot", "title": "Turbo Code Palette: Configure Global Root" },
-      { "command": "turbo-code-palette.reviewRecovery", "title": "Turbo Code Palette: Review Interrupted Save" }
+      {
+        "command": "turbo-code-palette.searchPacks",
+        "title": "Turbo Code Palette: Search Packs",
+        "icon": "$(search)"
+      },
+      {
+        "command": "turbo-code-palette.details",
+        "title": "Turbo Code Palette: Show Details"
+      },
+      {
+        "command": "turbo-code-palette.edit",
+        "title": "Turbo Code Palette: Edit Metadata",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "turbo-code-palette.newSnippet",
+        "title": "Turbo Code Palette: New Snippet",
+        "icon": "$(add)"
+      },
+      {
+        "command": "turbo-code-palette.createSelection",
+        "title": "Turbo Code Palette: Create Snippet from Selection"
+      },
+      {
+        "command": "turbo-code-palette.createFile",
+        "title": "Turbo Code Palette: Create Snippet from Current File"
+      },
+      {
+        "command": "turbo-code-palette.createPack",
+        "title": "Turbo Code Palette: Create Pack",
+        "icon": "$(add)"
+      },
+      {
+        "command": "turbo-code-palette.copyWorkspace",
+        "title": "Turbo Code Palette: Copy to Workspace"
+      },
+      {
+        "command": "turbo-code-palette.copyGlobal",
+        "title": "Turbo Code Palette: Copy to Global"
+      },
+      {
+        "command": "turbo-code-palette.delete",
+        "title": "Turbo Code Palette: Delete",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "turbo-code-palette.favorite",
+        "title": "Turbo Code Palette: Toggle Favorite",
+        "icon": "$(star-empty)"
+      },
+      {
+        "command": "turbo-code-palette.filter",
+        "title": "Turbo Code Palette: All / Favorites / Recent",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "turbo-code-palette.insert",
+        "title": "Turbo Code Palette: Insert Snippet",
+        "shortTitle": "Default Mode",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "turbo-code-palette.insertWithMode",
+        "title": "Turbo Code Palette: Insert Snippet with Mode…",
+        "shortTitle": "Choose Mode…"
+      },
+      {
+        "command": "turbo-code-palette.upgrade",
+        "title": "Turbo Code Palette: Upgrade Metadata Format"
+      },
+      {
+        "command": "turbo-code-palette.openGlobalFolder",
+        "title": "Turbo Code Palette: Open Global Library Folder"
+      },
+      {
+        "command": "turbo-code-palette.revealGlobalFolder",
+        "title": "Turbo Code Palette: Reveal Global Library"
+      },
+      {
+        "command": "turbo-code-palette.configureGlobalRoot",
+        "title": "Turbo Code Palette: Configure Global Root"
+      },
+      {
+        "command": "turbo-code-palette.reviewRecovery",
+        "title": "Turbo Code Palette: Review Interrupted Save"
+      },
+      {
+        "command": "turbo-code-palette.insertWithOptions",
+        "title": "Turbo Code Palette: Insert Snippet with Options…"
+      },
+      {
+        "command": "turbo-code-palette.configureInsertDefaults",
+        "title": "Turbo Code Palette: Configure Insert Defaults"
+      },
+      {
+        "command": "turbo-code-palette.configureCompliancePolicy",
+        "title": "Turbo Code Palette: Choose Optional Compliance Policy"
+      },
+      {
+        "command": "turbo-code-palette.cleanCopyWithOptions",
+        "title": "Turbo Code Palette: Clean Copy with Attribution…"
+      }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -80,12 +182,18 @@
     },
     "views": {
       "turbo-code-palette": [
-        { "id": "turbo-code-palette.cleanCopy", "name": "Clean Copy" },
         {
           "id": "turbo-code-palette.snippets",
           "name": "Snippets"
         },
-        { "id": "turbo-code-palette.packs", "name": "Packs" },
+        {
+          "id": "turbo-code-palette.packs",
+          "name": "Packs"
+        },
+        {
+          "id": "turbo-code-palette.cleanCopy",
+          "name": "Clean Copy"
+        },
         {
           "id": "turbo-code-palette.demos",
           "name": "Development Insertion Demos",
@@ -93,32 +201,95 @@
         }
       ]
     },
-    "submenus": [{ "id": "tcp.insertMenu", "label": "Insert" }],
+    "submenus": [
+      {
+        "id": "tcp.insertMenu",
+        "label": "Insert"
+      }
+    ],
     "menus": {
       "tcp.insertMenu": [
-        { "command": "turbo-code-palette.insert", "group": "1_insert@1" },
-        { "command": "turbo-code-palette.insertWithMode", "group": "1_insert@2" }
+        {
+          "command": "turbo-code-palette.insert",
+          "group": "1_insert@1"
+        },
+        {
+          "command": "turbo-code-palette.insertWithMode",
+          "group": "1_insert@2"
+        },
+        {
+          "command": "turbo-code-palette.insertWithOptions",
+          "group": "1_insert@3"
+        }
       ],
       "view/title": [
-        {"command":"turbo-code-palette.importPack","when":"view == turbo-code-palette.packs","group":"navigation@5"},
+        {
+          "command": "turbo-code-palette.importPack",
+          "when": "view == turbo-code-palette.packs",
+          "group": "navigation@5"
+        },
         {
           "command": "turbo-code-palette.openDropTarget",
           "when": "view == turbo-code-palette.demos",
           "group": "navigation"
         },
-        { "command": "turbo-code-palette.searchCatalog", "when": "view == turbo-code-palette.snippets", "group": "navigation@1" },
-        { "command": "turbo-code-palette.newSnippet", "when": "view == turbo-code-palette.snippets", "group": "navigation@2" },
-        { "command": "turbo-code-palette.searchPacks", "when": "view == turbo-code-palette.packs", "group": "navigation@1" },
-        { "command": "turbo-code-palette.createPack", "when": "view == turbo-code-palette.packs", "group": "navigation@2" },
-        { "command": "turbo-code-palette.reloadCatalog", "when": "view == turbo-code-palette.snippets || view == turbo-code-palette.packs", "group": "navigation@3" },
-        { "command": "turbo-code-palette.filter", "when": "view == turbo-code-palette.snippets || view == turbo-code-palette.packs", "group": "navigation@4" },
-        { "command": "turbo-code-palette.openGlobalFolder", "when": "view == turbo-code-palette.packs", "group": "library@1" },
-        { "command": "turbo-code-palette.revealGlobalFolder", "when": "view == turbo-code-palette.packs", "group": "library@2" },
-        { "command": "turbo-code-palette.configureGlobalRoot", "when": "view == turbo-code-palette.packs", "group": "library@3" }
+        {
+          "command": "turbo-code-palette.searchCatalog",
+          "when": "view == turbo-code-palette.snippets",
+          "group": "navigation@1"
+        },
+        {
+          "command": "turbo-code-palette.newSnippet",
+          "when": "view == turbo-code-palette.snippets",
+          "group": "navigation@2"
+        },
+        {
+          "command": "turbo-code-palette.searchPacks",
+          "when": "view == turbo-code-palette.packs",
+          "group": "navigation@1"
+        },
+        {
+          "command": "turbo-code-palette.createPack",
+          "when": "view == turbo-code-palette.packs",
+          "group": "navigation@2"
+        },
+        {
+          "command": "turbo-code-palette.reloadCatalog",
+          "when": "view == turbo-code-palette.snippets || view == turbo-code-palette.packs",
+          "group": "navigation@3"
+        },
+        {
+          "command": "turbo-code-palette.filter",
+          "when": "view == turbo-code-palette.snippets || view == turbo-code-palette.packs",
+          "group": "navigation@4"
+        },
+        {
+          "command": "turbo-code-palette.openGlobalFolder",
+          "when": "view == turbo-code-palette.packs",
+          "group": "library@1"
+        },
+        {
+          "command": "turbo-code-palette.revealGlobalFolder",
+          "when": "view == turbo-code-palette.packs",
+          "group": "library@2"
+        },
+        {
+          "command": "turbo-code-palette.configureGlobalRoot",
+          "when": "view == turbo-code-palette.packs",
+          "group": "library@3"
+        }
       ],
       "view/item/context": [
-        {"command":"turbo-code-palette.exportPack","when":"viewItem == tcp.pack","group":"3_copy@3"},
-        {"command":"turbo-code-palette.compare","when":"viewItem == tcp.snippet || viewItem == tcp.pack","group":"2_edit@3"},
+        {
+          "command": "turbo-code-palette.exportPack",
+          "when": "viewItem == tcp.pack",
+          "group": "3_copy@3"
+        },
+        {
+          "command": "turbo-code-palette.compare",
+          "when": "viewItem == tcp.snippet || viewItem == tcp.pack",
+          "group": "2_edit@3"
+        },
         {
           "command": "turbo-code-palette.insertDemo",
           "when": "view == turbo-code-palette.demos && viewItem == tcp.phase0.snippet",
@@ -129,28 +300,95 @@
           "when": "view == turbo-code-palette.demos && viewItem == tcp.phase0.snippet",
           "group": "1_insert"
         },
-        { "command": "turbo-code-palette.insert", "when": "viewItem == tcp.snippet", "group": "inline@1" },
-        { "submenu": "tcp.insertMenu", "when": "viewItem == tcp.snippet", "group": "1_insert" },
-        { "command": "turbo-code-palette.edit", "when": "viewItem == tcp.snippet || viewItem == tcp.pack", "group": "2_edit@1" },
-        { "command": "turbo-code-palette.favorite", "when": "viewItem == tcp.snippet || viewItem == tcp.pack", "group": "2_edit@2" },
-        { "command": "turbo-code-palette.copyWorkspace", "when": "(viewItem == tcp.snippet || viewItem == tcp.pack) && tcp.hasWorkspace", "group": "3_copy@1" },
-        { "command": "turbo-code-palette.copyGlobal", "when": "viewItem == tcp.snippet || viewItem == tcp.pack", "group": "3_copy@2" },
-        { "command": "turbo-code-palette.delete", "when": "viewItem == tcp.snippet || viewItem == tcp.pack", "group": "4_delete" }
+        {
+          "command": "turbo-code-palette.insert",
+          "when": "viewItem == tcp.snippet",
+          "group": "inline@1"
+        },
+        {
+          "submenu": "tcp.insertMenu",
+          "when": "viewItem == tcp.snippet",
+          "group": "1_insert"
+        },
+        {
+          "command": "turbo-code-palette.edit",
+          "when": "viewItem == tcp.snippet || viewItem == tcp.pack",
+          "group": "2_edit@1"
+        },
+        {
+          "command": "turbo-code-palette.favorite",
+          "when": "viewItem == tcp.snippet || viewItem == tcp.pack",
+          "group": "2_edit@2"
+        },
+        {
+          "command": "turbo-code-palette.copyWorkspace",
+          "when": "(viewItem == tcp.snippet || viewItem == tcp.pack) && tcp.hasWorkspace",
+          "group": "3_copy@1"
+        },
+        {
+          "command": "turbo-code-palette.copyGlobal",
+          "when": "viewItem == tcp.snippet || viewItem == tcp.pack",
+          "group": "3_copy@2"
+        },
+        {
+          "command": "turbo-code-palette.delete",
+          "when": "viewItem == tcp.snippet || viewItem == tcp.pack",
+          "group": "4_delete"
+        }
       ],
       "editor/context": [
-        { "command": "turbo-code-palette.createSelection", "when": "editorHasSelection", "group": "tcp@1" },
-        { "command": "turbo-code-palette.createFile", "group": "tcp@2" }
+        {
+          "command": "turbo-code-palette.createSelection",
+          "when": "editorHasSelection",
+          "group": "tcp@1"
+        },
+        {
+          "command": "turbo-code-palette.createFile",
+          "group": "tcp@2"
+        }
       ]
     },
     "configuration": {
       "title": "Turbo Code Palette",
       "properties": {
-        "turboCodePalette.csharpHelperPath": {"type":"string","default":"","scope":"machine","description":"Optional trusted Tcp.CSharp.dll absolute path. Requires .NET 10; no automatic build/download. Empty keeps TCP independent of .NET. Reload Window after changing."},
-        "turboCodePalette.csharpLanguageVersion": {"type":"string","default":"","description":"Explicit C# version, e.g. 12.0. Empty uses standalone C# 14 with diagnostics; project properties are not evaluated. Reload Window after changing."},
-        "turboCodePalette.csharpDefines": {"type":"array","items":{"type":"string"},"default":[],"description":"Explicit preprocessor symbols for standalone Roslyn analysis. Reload Window after changing."},
-        "turboCodePalette.compliancePolicy": {"type":"string","enum":["none","atcoder-20261014"],"default":"none","description":"Independent of presets. AtCoder policy validates provenance assertions and preserves attribution; it does not certify eligibility or verify web publication."},
-        "turboCodePalette.atcoderContestStartsAt": {"type":"string","default":"","description":"Contest start ISO 8601 timestamp with timezone. Only compared with declared source[].publishedAt assertions; web publication is not independently verified."},
-        "turboCodePalette.sourceMarkers": {"type":"boolean","default":false,"description":"Optionally annotate inserted source with UUID/version comment markers. Only supported languages and conservatively verified line contexts are annotated. Markers are comparison evidence, never proof of compatibility."},
+        "turboCodePalette.csharpHelperPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Advanced: trusted absolute Tcp.CSharp.dll path, used only when csharpProvider is custom. Normal installations use the packaged helper. Requires existing .NET 10; never builds or downloads a runtime. Reload Window after changing."
+        },
+        "turboCodePalette.csharpLanguageVersion": {
+          "type": "string",
+          "default": "",
+          "description": "Explicit C# version, e.g. 12.0. Empty uses standalone C# 14 with diagnostics; project properties are not evaluated. Reload Window after changing."
+        },
+        "turboCodePalette.csharpDefines": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Explicit preprocessor symbols for standalone Roslyn analysis. Reload Window after changing."
+        },
+        "turboCodePalette.compliancePolicy": {
+          "type": "string",
+          "enum": [
+            "none",
+            "atcoder-20261014"
+          ],
+          "default": "none",
+          "description": "Independent of presets. AtCoder policy validates provenance assertions and preserves attribution; it does not certify eligibility or verify web publication."
+        },
+        "turboCodePalette.atcoderContestStartsAt": {
+          "type": "string",
+          "default": "",
+          "description": "Contest start ISO 8601 timestamp with timezone. Only compared with declared source[].publishedAt assertions; web publication is not independently verified."
+        },
+        "turboCodePalette.sourceMarkers": {
+          "type": "boolean",
+          "default": false,
+          "description": "Optionally annotate inserted source with UUID/version comment markers. Only supported languages and conservatively verified line contexts are annotated. Markers are comparison evidence, never proof of compatibility."
+        },
         "turboCodePalette.globalRoot": {
           "type": "string",
           "default": "",
@@ -158,19 +396,47 @@
           "description": "Absolute Global library directory on the extension host. Empty uses extension storage. Open/Reveal Global Library or Configure Global Root makes these assets accessible. Reload explicitly after changing the root."
         },
         "turboCodePalette.showDevelopmentDemos": {
-          "type": "boolean", "default": false,
+          "type": "boolean",
+          "default": false,
           "description": "Show historical Phase 0 text demonstration commands (reload window required). Product Snippets use the shared insertion pipeline."
         },
         "turboCodePalette.previewBeforeInsert": {
           "type": "boolean",
           "default": false,
           "description": "Preview the complete insertion plan before applying. Cancelling changes no target or output files. Native drag and drop is retired; use Insert."
+        },
+        "turboCodePalette.csharpProvider": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "disabled",
+            "custom"
+          ],
+          "default": "auto",
+          "scope": "machine",
+          "description": "Optional C# provider: auto uses the packaged helper with an existing .NET 10 runtime; disabled keeps generic operations; custom uses the advanced DLL path. No automatic runtime installation. Reload Window after changing."
+        },
+        "turboCodePalette.sourceAttribution": {
+          "type": "string",
+          "enum": [
+            "none",
+            "source-urls",
+            "full"
+          ],
+          "default": "none",
+          "description": "Default source attribution for Insert and Clean Copy, independent of placement mode, TCP markers and license notices. source-urls uses source[].url; full also includes Snippet name/version/authors. Optional policy can require URLs. Unknown Clean Copy origins require explicit confirmation."
         }
       }
     },
     "jsonValidation": [
-      { "fileMatch": "**/snippet.json", "url": "./schemas/snippet.schema.json" },
-      { "fileMatch": "**/pack.json", "url": "./schemas/pack.schema.json" }
+      {
+        "fileMatch": "**/snippet.json",
+        "url": "./schemas/snippet.schema.json"
+      },
+      {
+        "fileMatch": "**/pack.json",
+        "url": "./schemas/pack.schema.json"
+      }
     ]
   },
   "scripts": {
@@ -192,7 +458,10 @@
     "test:unit": "npm run compile-tests && node --test out/test/unit/*.test.js scripts/public-repo-rules.test.mjs",
     "test:host": "npm run compile-tests && npm run compile && node scripts/run-host-tests.mjs",
     "dev:host": "npm run compile && node scripts/launch-dev-host.mjs",
-    "check-public": "node scripts/check-public-repo.mjs"
+    "check-public": "node scripts/check-public-repo.mjs",
+    "package:helper": "node scripts/package-helper.mjs",
+    "package:vsix": "npm run package:helper && vsce package --no-dependencies --out .vscode-test/turbo-code-palette-0.0.1.vsix && node scripts/audit-vsix.mjs .vscode-test/turbo-code-palette-0.0.1.vsix",
+    "test:installed": "node scripts/installed-smoke.mjs"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
@@ -202,6 +471,7 @@
     "@types/yazl": "3.3.1",
     "@vscode/test-cli": "^0.0.15",
     "@vscode/test-electron": "^3.0.0",
+    "@vscode/vsce": "4.0.0",
     "esbuild": "^0.28.1",
     "eslint": "^10.5.0",
     "npm-run-all": "^4.1.5",
@@ -216,5 +486,10 @@
     "jsonc-parser": "3.3.1",
     "yauzl": "3.4.0",
     "yazl": "3.3.1"
+  },
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oz-coden/turbo-code-palette.git"
   }
 }

@@ -16,7 +16,7 @@ const dll = path.resolve(__dirname, '../../..', 'csharp/Tcp.CSharp/bin/Release/n
 const peer = path.resolve(__dirname, '../../..', 'csharp/Tcp.ProtocolFixture/bin/Release/net10.0/Tcp.ProtocolFixture.dll');
 const uuid = (n: number) => '60000000-0000-0000-0000-' + String(n).padStart(12, '0');
 const insertIo = (): InsertionInteractions => ({ input: async () => 'VALUE', mode: async (_, modes) => modes[0], output: async () => undefined, preview: async () => true, warnings: async () => true });
-const cleanIo = (): CleanInteractions => ({ preset: async () => 'Readable', custom: async available => available.map(t => t.id), bundle: async () => undefined, bundleMode: async () => 'semantic', warnings: async () => true, output: async () => 'clipboard', preview: async () => undefined, destination: async () => undefined, clipboard: async () => {}, untitled: async () => {} });
+const cleanIo = (): CleanInteractions => ({ origins: async () => [], preset: async () => 'Readable', custom: async available => available.map(t => t.id), bundle: async () => undefined, bundleMode: async () => 'semantic', warnings: async () => true, output: async () => 'clipboard', preview: async () => undefined, destination: async () => undefined, clipboard: async () => {}, untitled: async () => {} });
 const capture = (editor: vscode.TextEditor) => ({ uri: editor.document.uri, version: editor.document.version, selection: editor.selection });
 
 suite('Phase 6 — optional Roslyn in an Extension Host', () => {
@@ -34,12 +34,12 @@ suite('Phase 6 — optional Roslyn in an Extension Host', () => {
 	}
 	async function editor(content: string) { return vscode.window.showTextDocument(await vscode.workspace.openTextDocument({ content, language: 'csharp' }), { preview: false }); }
 	function requireHelper(context: Mocha.Context) { if (!existsSync(dll) || !existsSync(peer)) { context.skip(); } }
-	test('default activation stays .NET independent and exposes the provider unavailable reason', async () => { assert.equal(api.product.csharp.client.running, false); assert.match(await vscode.commands.executeCommand<string>('turbo-code-palette.csharpProviderStatus'), /unavailable/); });
+	test('default activation stays .NET independent and exposes the provider unavailable reason', async () => { assert.equal(api.product.csharp.client.running, false); assert.ok(api.product.csharp.client.settings.dll.endsWith('Tcp.CSharp.dll') || !api.product.csharp.configured); const absent = new CSharpProvider(new CSharpClient({ dll: '' })); try { assert.equal((await absent.availability()).available, false); } finally { absent.dispose(); } });
 	test('structure-aware namespace Insert uses the shared pipeline, preserves citation/license, and one Undo', async function () {
 		requireHelper(this); await sandbox(async (library, provider, state) => {
 			const target = await editor('namespace N;\nclass Current {}\n'), before = target.document.getText(), asset = library.catalog.snapshot!.snippets[0]; target.selection = new vscode.Selection(1, 0, 1, 0);
 			const pipeline = new InsertionPipeline(library, state, undefined, insertIo(), api.product.comparison, provider);
-			try { assert.equal(await pipeline.run({ asset, target: capture(target) }), 'inserted'); assert.match(target.document.getText(), /class Dep/); assert.match(target.document.getText(), /Source URL: https:\/\/example.com\/dep/); assert.match(target.document.getText(), /TCP License: keep/); assert.equal(state.get(`snippet:${uuid(1)}:v1.0.0`).usage, 1); await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup'); await vscode.commands.executeCommand('undo'); assert.equal(target.document.getText(), before); } finally { pipeline.dispose(); }
+			try { assert.equal(await pipeline.run({ asset, target: capture(target), options: { attribution: 'source-urls' } }), 'inserted'); assert.match(target.document.getText(), /class Dep/); assert.match(target.document.getText(), /Source URL: https:\/\/example.com\/dep/); assert.match(target.document.getText(), /TCP License: keep/); assert.equal(state.get(`snippet:${uuid(1)}:v1.0.0`).usage, 1); await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup'); await vscode.commands.executeCommand('undo'); assert.equal(target.document.getText(), before); } finally { pipeline.dispose(); }
 		}, undefined, { source: [{ url: 'https://example.com/dep' }], licenseNotices: [{ text: 'keep' }] });
 	});
 	test('member overload is accepted, duplicate signature and malformed target stop before apply', async function () {
@@ -67,7 +67,7 @@ suite('Phase 6 — optional Roslyn in an Extension Host', () => {
 		requireHelper(this); await sandbox(async (library, provider) => {
 			const target = await editor('System.Console.WriteLine(Dep.Answer);'), before = target.document.getText(); const roots = await csharpBundleRoots(library, before, provider); assert.equal(roots[0].metadata.id, uuid(1)); assert.match((await csharpBundleText(library, before, roots, provider)).text, /class Dep/);
 			const io = cleanIo(); let copied = ''; io.clipboard = async text => { copied = text; }; const clean = new CleanCopy(library, () => capture(target), api.product.comparison, undefined, io, provider);
-			try { await clean.run('bundle'); assert.equal(clean.lastPlan!.reviewOnly, false); assert.match(copied, /Source URL: https:\/\/example.com\/dep/); assert.match(copied, /TCP License: keep/); await provider.validate(copied); assert.equal(target.document.getText(), before); } finally { clean.dispose(); }
+			try { await clean.run('bundle', capture(target), { attribution: 'source-urls' }); assert.equal(clean.lastPlan!.reviewOnly, false); assert.match(copied, /Source URL: https:\/\/example.com\/dep/); assert.match(copied, /TCP License: keep/); await provider.validate(copied); assert.equal(target.document.getText(), before); } finally { clean.dispose(); }
 		}, undefined, { source: [{ url: 'https://example.com/dep' }], licenseNotices: [{ text: 'keep' }, { text: 'keep' }] });
 	});
 	test('AtCoder missing AI provenance blocks Insert/Bundle output and leaves document/clipboard/user state unchanged', async function () {

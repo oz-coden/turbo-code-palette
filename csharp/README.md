@@ -1,6 +1,6 @@
 # Optional C# helper
 
-TCP's JavaScript extension does not require .NET. C# semantic features opt in through a trusted helper DLL in the machine-scoped `turboCodePalette.csharpHelperPath` setting. The extension never builds/downloads a helper or evaluates a workspace project. Empty configuration retains the existing conservative generic provider.
+TCP's JavaScript extension does not require .NET. The VSIX contains a portable framework-dependent helper, discovered with `csharpProvider: auto` in trusted workspaces. Only advanced C# operations start it. An existing .NET 10 runtime is required; TCP never downloads/installs one or evaluates a workspace project. Unavailable/disabled helpers retain generic TCP operations. `csharpProvider: custom` and `csharpHelperPath` are advanced machine-scoped overrides.
 
 Build with .NET SDK 10:
 
@@ -13,7 +13,7 @@ npm run compile
 npm run measure:csharp
 ```
 
-Configure the absolute location of `csharp/Tcp.CSharp/bin/Release/net10.0/Tcp.CSharp.dll` locally in VS Code Settings, then Reload Window. Do not commit machine paths. Execution requires .NET 10 runtime. Source/build outputs are excluded from the extension package; a final binary distribution method is intentionally undecided. `Tcp.ProtocolFixture` is an adversarial test peer and must never be configured for normal use or distributed as the provider.
+For development only, choose custom mode and the built `csharp/Tcp.CSharp/bin/Release/net10.0/Tcp.CSharp.dll` locally, then Reload Window. Do not commit machine paths. Normal VSIX users need no DLL setting. `npm run package:helper` publishes only our helper into ignored `resources/csharp`, excluding PDBs, apphost, translations and test peers. `Tcp.ProtocolFixture` is an adversarial test peer and is never distributed. Framework-dependent distribution is the Phase 7 recommendation; self-contained runtime variants remain deferred until release approval.
 
 `C# Provider Status` probes availability and displays the reason for failure. `Cancel Current C# Operation` cancels the pending request and terminates the helper. It starts again for a subsequent request. After configuration changes Reload Window is required. Restricted workspaces do not start a helper.
 

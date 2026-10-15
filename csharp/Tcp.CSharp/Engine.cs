@@ -232,10 +232,11 @@ public static class Engine {
         return result;
     }
     static object Header(JsonElement input, string source, CompilationUnitSyntax root, CSharpParseOptions options, CancellationToken token) {
-        var notices = Strings(input, "notices"); var urls = Strings(input, "urls");
+        var notices = Strings(input, "notices"); var urls = Strings(input, "urls"); var details = Strings(input, "details");
+        if (details.Length > 10000 || details.Sum(d => d.Length) > 1024 * 1024 || details.Any(d => d.Any(char.IsControl) || d.Contains('\u2028') || d.Contains('\u2029'))) throw new InvalidOperationException("Unsafe attribution details.");
         if (notices.Length + urls.Length > 10000 || notices.Sum(n => n.Length) > 1024 * 1024 || notices.Any(n => n.Any(ch => char.IsControl(ch) && ch is not '\r' and not '\n' and not '\t') || n.Contains('\u2028') || n.Contains('\u2029')) || urls.Any(u => !Uri.TryCreate(u, UriKind.Absolute, out var uri) || uri.Scheme is not ("https" or "http") || u.Any(char.IsWhiteSpace))) throw new InvalidOperationException("Unsafe attribution/notice text.");
         var existingUrls = root.DescendantTrivia().Where(t => t.IsKind(SyntaxKind.SingleLineCommentTrivia) && t.ToString().StartsWith("// Source URL: ", StringComparison.Ordinal)).Select(t => t.ToString()[15..]).ToHashSet(StringComparer.Ordinal);
-        var lines = urls.Distinct().Where(u => !existingUrls.Contains(u)).Select(u => "// Source URL: " + u).Concat(notices.Distinct().SelectMany(n => n.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n').Select(l => "// TCP License: " + l)));
+        var lines = urls.Distinct().Where(u => !existingUrls.Contains(u)).Select(u => "// Source URL: " + u).Concat(details.Distinct().Select(d => "// " + d)).Concat(notices.Distinct().SelectMany(n => n.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n').Select(l => "// TCP License: " + l)));
         var prefix = string.Join("\n", lines); if (prefix.Length > 0) prefix += "\n";
         var bom = source.StartsWith('\uFEFF') ? "\uFEFF" : "";
         var text = bom + prefix + source[bom.Length..];

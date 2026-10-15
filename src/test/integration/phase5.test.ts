@@ -68,8 +68,8 @@ suite('Phase 5 — safe Clean Copy in a real Extension Host', () => {
 	}));
 	test('marker removal retains full Selection context and license notices are deduplicated/reapplied safely', async () => sandbox(async library => {
 		const marked = markSource({ id: uuid(1), version: 'v1.0.0' }, 'int VALUE = 1;\n', 'csharp', '', 0, 0, '\n')!, target = await editor(marked), interactions = io(), clean = service(library, target, interactions); let copied = ''; interactions.clipboard = async text => { copied = text; };
-		await clean.run('file'); assert.equal(copied, '// Notice\n\nint VALUE = 1;\n\n'); assert.deepEqual(clean.lastPlan!.notices, ['Notice']); assert.ok(!copied.includes('TCP BEGIN')); assert.equal(target.document.getText(), marked);
-		const start = marked.indexOf('int VALUE'); target.selection = new vscode.Selection(target.document.positionAt(start), target.document.positionAt(start + 14)); await clean.run('selection'); assert.deepEqual(clean.lastPlan!.notices, ['Notice']); assert.ok(copied.startsWith('// Notice\n'));
+		await clean.run('file'); assert.equal(copied, '// TCP License: Notice\n\nint VALUE = 1;\n\n'); assert.deepEqual(clean.lastPlan!.notices, ['Notice']); assert.ok(!copied.includes('TCP BEGIN')); assert.equal(target.document.getText(), marked);
+		const start = marked.indexOf('int VALUE'); target.selection = new vscode.Selection(target.document.positionAt(start), target.document.positionAt(start + 14)); await clean.run('selection'); assert.deepEqual(clean.lastPlan!.notices, ['Notice']); assert.ok(copied.startsWith('// TCP License: Notice\n'));
 		const raw = 'var text = """\n' + marked + '""";\n', rawTarget = await editor(raw), retained = service(library, rawTarget, interactions); await retained.run('file'); assert.ok(retained.lastPlan!.text.includes(marked)); assert.ok(retained.lastPlan!.warnings.some(warning => warning.includes('retained'))); clean.dispose(); retained.dispose();
 	}));
 	test('unsupported language with known notices stops instead of adding another language comment', async () => sandbox(async library => {

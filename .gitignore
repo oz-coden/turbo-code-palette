@@ -11,6 +11,7 @@ playwright-report/
 *.tsbuildinfo
 csharp/**/bin/
 csharp/**/obj/
+/resources/csharp/
 
 # Secrets and local-only configuration (template files remain publishable)
 .env

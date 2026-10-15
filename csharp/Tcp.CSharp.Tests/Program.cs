@@ -115,4 +115,9 @@ Test("explicit language version and defines; unsupported/preview options rejecte
     Check(JsonSerializer.SerializeToElement(Engine.Execute("analyze", input).Value).GetProperty("exports").GetArrayLength() == 1);
     Reject(() => Engine.Execute("analyze", JsonSerializer.SerializeToElement(new { documents = new[] { new { id = "a.cs", source = "class A {}" } }, options = new { languageVersion = "preview" } })));
 });
+Test("full attribution details are independent of identity markers and reject line injection", () => {
+    var source = "class A {}"; var output = Output(Run("header", source, new { notices = new[] { "Keep" }, urls = new[] { "https://example.com/code" }, details = new[] { "Snippet: A v1.0.0 | Authors: Author" } }));
+    Check(output.Contains("Source URL:")); Check(output.Contains("Snippet: A v1.0.0 | Authors: Author")); Check(output.Contains("TCP License: Keep")); Check(!output.Contains("TCP BEGIN")); Run("validate", output);
+    Reject(() => Run("header", source, new { details = new[] { "bad\nline" } }));
+});
 Console.WriteLine($"Roslyn tests passed: {count}");

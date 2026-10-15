@@ -9,7 +9,7 @@ jobs:
   build-and-unit:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -32,7 +32,12 @@ jobs:
       - run: npm run measure:csharp
 
   extension-host:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        code: ['1.134.0', '1.142.0']
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -45,4 +50,13 @@ jobs:
       - run: npm ci
       - run: npm run build:csharp
       - run: dotnet build csharp/Tcp.ProtocolFixture/Tcp.ProtocolFixture.csproj -c Release
-      - run: npm test
+      - run: npm run compile-tests && npm run compile
+      - if: runner.os != 'Linux'
+        run: npm test --ignore-scripts -- --code-version ${{ matrix.code }}
+      - if: runner.os == 'Linux'
+        run: xvfb-run -a npm test --ignore-scripts -- --code-version ${{ matrix.code }}
+      - run: npm run package:vsix
+      - if: runner.os != 'Linux'
+        run: node scripts/ci-installed.mjs ${{ matrix.code }}
+      - if: runner.os == 'Linux'
+        run: xvfb-run -a node scripts/ci-installed.mjs ${{ matrix.code }}

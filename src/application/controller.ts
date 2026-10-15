@@ -4,6 +4,8 @@ import { Library, locationKey, packOf, sameRoot, type DependencyRow, type Export
 import { CSharpClient } from '../language/csharpClient';
 import { CSharpProvider } from '../language/csharpProvider';
 import type { CompliancePolicy } from '../core/compliance';
+import { helperLocation } from '../language/helperLocation';
+import type { InsertOptions, SourceAttribution } from '../core/insertion/options';
 import { UserState } from './userState';
 import { ChangeTracker } from './changes';
 import { InsertionAdapter } from './insertionAdapter';
@@ -79,11 +81,12 @@ export class LibraryController implements vscode.Disposable {
 		});
 		this.state = new UserState(context.globalState); this.snippets = new AssetTree(this.library.catalog, 'snippet', this.state); this.packs = new AssetTree(this.library.catalog, 'pack', this.state);
 		const config = vscode.workspace.getConfiguration('turboCodePalette');
-		this.csharp = new CSharpProvider(new CSharpClient({ dll: vscode.workspace.isTrusted ? config.get<string>('csharpHelperPath', '') : '', options: { languageVersion: config.get<string>('csharpLanguageVersion') || undefined, defines: config.get<string[]>('csharpDefines', []) } }), () => vscode.workspace.getConfiguration('turboCodePalette').get<CompliancePolicy>('compliancePolicy', 'none'));
+		const helper = helperLocation(context.extensionUri.fsPath, config.get('csharpProvider', 'auto'), config.get('csharpHelperPath', ''), vscode.workspace.isTrusted);
+		this.csharp = new CSharpProvider(new CSharpClient({ dll: helper, options: { languageVersion: config.get<string>('csharpLanguageVersion') || undefined, defines: config.get<string[]>('csharpDefines', []) } }), () => vscode.workspace.getConfiguration('turboCodePalette').get<CompliancePolicy>('compliancePolicy', 'none'));
 		this.pipeline = new InsertionPipeline(this.library, this.state, () => { if (this.rootsDirty || this.busy) { throw new Error('Library is changing. Finish the save / Reload before Insert.'); } }, undefined, this.comparison, this.csharp);
 		this.cleanCopy = new CleanCopy(this.library, () => this.insertion.capture(), this.comparison, () => { if (this.rootsDirty || this.busy) { throw new Error('Library is changing. Finish the save / Reload before Clean Copy.'); } }, undefined, this.csharp);
 		this.cleanView = vscode.window.createTreeView(prefix + 'cleanCopy', { treeDataProvider: new CleanCopyTree() });
-		this.cleanView.message = 'Scope → preset → output. Optional C# Roslyn / independent Compliance Policy: Settings. No submission eligibility certification.';
+		this.cleanView.message = 'Selection / File / Bundle → Preset → Output. Original files stay unchanged.';
 		this.insertion.handler = async request => { const result = await this.pipeline.run(request); if (result === 'already-present') { void vscode.window.showInformationMessage('This Snippet and its dependencies are already present in the verified editor state.'); } this.refresh(); };
 		this.snippetView = vscode.window.createTreeView(prefix + 'snippets', { treeDataProvider: this.snippets, canSelectMany: true });
 		this.packView = vscode.window.createTreeView(prefix + 'packs', { treeDataProvider: this.packs, canSelectMany: true });
@@ -96,13 +99,13 @@ export class LibraryController implements vscode.Disposable {
 			if (choice === 'Reload') { try { await this.reload(); } catch (error) { void vscode.window.showErrorMessage(error instanceof Error ? error.message : 'Reload failed.'); } }
 		}, pending => { this.snippetView.badge = pending ? { value: 1, tooltip: 'External changes pending — Reload library' } : undefined; this.packView.badge = this.snippetView.badge; });
 		this.subscriptions.push(this.snippets, this.packs, this.snippetView, this.packView, this.panel, this.insertion, this.pipeline, this.changes, this.comparison, this.cleanCopy, this.cleanView, this.csharp);
-		this.subscriptions.push(vscode.workspace.onDidChangeConfiguration(event => { if (['csharpHelperPath', 'csharpLanguageVersion', 'csharpDefines'].some(key => event.affectsConfiguration('turboCodePalette.' + key))) { this.csharp.dispose(); void vscode.window.showInformationMessage('C# provider settings changed. Reload Window before using semantic operations. Generic TCP remains available.'); } }));
+		this.subscriptions.push(vscode.workspace.onDidChangeConfiguration(event => { if (['csharpProvider', 'csharpHelperPath', 'csharpLanguageVersion', 'csharpDefines'].some(key => event.affectsConfiguration('turboCodePalette.' + key))) { this.csharp.dispose(); void vscode.window.showInformationMessage('C# provider settings changed. Reload Window before using semantic operations. Generic TCP remains available.'); } }));
 		const register = (name: string, callback: (...args: unknown[]) => Promise<unknown>) => this.subscriptions.push(vscode.commands.registerCommand(prefix + name, (...args: unknown[]) => callback(...args).catch(async error => {
 			if (error instanceof ConflictError) { try { await this.comparison.conflict(this.library, error); } catch (reviewError) { void vscode.window.showErrorMessage((reviewError as Error).message); } }
 			else { void vscode.window.showErrorMessage(error instanceof Error ? error.message : 'Operation failed.'); }
 		})));
 		register('reloadCatalog', () => this.reload());
-		register('csharpProviderStatus', async () => { if (this.csharp.configured) { try { await this.csharp.analyze(['class ProviderProbe {}']); } catch { /* Status includes the bounded reason. */ } } void vscode.window.showInformationMessage(this.csharp.client.status); return this.csharp.client.status; });
+		register('csharpProviderStatus', async () => { const status = await this.csharp.availability(); void vscode.window.showInformationMessage(status.reason); return status.reason; });
 		register('cancelCsharpOperation', async () => { this.csharp.client.cancel(); });
 		register('searchCatalog', async query => {
 			if (!this.library.catalog.snapshot) { await this.reload(); }
@@ -126,6 +129,18 @@ export class LibraryController implements vscode.Disposable {
 		const insert = async (input?: unknown, chooseMode = false) => { const target = this.insertion.capture(); if (!target) { throw new Error('Open a project text editor and select the insertion position first.'); } const asset = await this.choose(input, 'snippet'); if (asset) { await this.insertion.request(asset, chooseMode ? 'choose' : undefined, target); } };
 		register('insert', input => insert(input));
 		register('insertWithMode', input => insert(input, true));
+		register('insertWithOptions', async input => {
+			const target = this.insertion.capture(); if (!target) { throw new Error('Open a text editor and select the insertion position first.'); }
+			const asset = await this.choose(input, 'snippet'); if (!asset) { return; } const options = await this.chooseInsertOptions(); if (options) { await this.insertion.request(asset, undefined, target, options); }
+		});
+		register('configureInsertDefaults', async () => { await vscode.commands.executeCommand('workbench.action.openSettings', 'turboCodePalette.sourceAttribution'); });
+		register('configureCompliancePolicy', async () => {
+			const chosen = await vscode.window.showQuickPick([{ label: 'None — general use', value: 'none' }, { label: 'AtCoder ABC/ARC/AGC — 2026-10-14', value: 'atcoder-20261014' }], { title: 'Optional Compliance Policy', placeHolder: 'Independent of presets. No automatic publication verification or eligibility certification.' }); if (!chosen) { return; }
+			let start: string | undefined;
+			if (chosen.value !== 'none') { start = await vscode.window.showInputBox({ title: 'Contest start (explicit timezone required)', prompt: 'ISO 8601, for example 2026-10-17T21:00:00+09:00. Publication metadata remains an unverified assertion.', value: vscode.workspace.getConfiguration('turboCodePalette').get('atcoderContestStartsAt', ''), validateInput: value => /T.*(?:Z|[+-][0-9]{2}:[0-9]{2})$/.test(value) && Number.isFinite(Date.parse(value)) ? undefined : 'Enter a timestamp with an explicit timezone.' }); if (start === undefined) { return; } }
+			const current = vscode.workspace.getConfiguration('turboCodePalette'); if (start !== undefined) { await current.update('atcoderContestStartsAt', start, vscode.ConfigurationTarget.Global); } await current.update('compliancePolicy', chosen.value, vscode.ConfigurationTarget.Global);
+		});
+		register('cleanCopyWithOptions', async () => { const target = this.insertion.capture(); const attribution = await this.chooseAttribution(); if (attribution) { const selected = await vscode.window.showQuickPick(['selection', 'file', 'bundle'], { title: 'Clean Copy scope' }); if (selected) { await this.cleanCopy.run(selected as CleanScope, target, { attribution }); } } });
 		register('upgrade', async input => { const asset = await this.choose(input, undefined, true); if (asset) { await this.mutate(() => this.library.upgrade(asset)); await this.showDetails(this.find(locationKey(asset))); } });
 		register('openGlobalFolder', () => this.openGlobal(false)); register('revealGlobalFolder', () => this.openGlobal(true));
 		register('configureGlobalRoot', async () => {
@@ -149,6 +164,23 @@ export class LibraryController implements vscode.Disposable {
 		for (const folder of workspaces.filter(folder => folder.uri.scheme !== 'file')) { const uri = vscode.Uri.joinPath(folder.uri, '.snippets'); roots.unshift({ scope: 'workspace', workspaceId: folder.uri.toString(), path: uri.toString(), uri: uri.toString() }); }
 		if (!config && this.context.globalStorageUri.scheme !== 'file') { const uri = vscode.Uri.joinPath(this.context.globalStorageUri, 'snippets'); roots[roots.length - 1] = { scope: 'global', path: uri.toString(), uri: uri.toString() }; }
 		return roots;
+	}
+	private async chooseAttribution(): Promise<SourceAttribution | undefined> {
+		return (await vscode.window.showQuickPick([
+			{ label: 'None', description: 'No added source attribution; license notices remain independent', value: 'none' as const },
+			{ label: 'Source URLs', description: 'Canonical source[].url only; includes dependencies', value: 'source-urls' as const },
+			{ label: 'Full attribution', description: 'Source URLs, Snippet name, version and authors', value: 'full' as const },
+		], { title: 'Source attribution', placeHolder: 'Optional policy can require URLs. Repository/homepage URLs are never substituted.' }))?.value;
+	}
+	private async chooseInsertOptions(): Promise<InsertOptions | undefined> {
+		const attribution = await this.chooseAttribution(); if (!attribution) { return; }
+		const config = vscode.workspace.getConfiguration('turboCodePalette');
+		const toggles = await vscode.window.showQuickPick([
+			{ label: 'TCP identity markers', description: 'UUID/version evidence; independent of source attribution', value: 'identityMarkers', picked: config.get('sourceMarkers', false) },
+			{ label: 'Preview before apply', description: 'Review the final plan / VS Code Diff', value: 'preview', picked: config.get('previewBeforeInsert', false) },
+		], { title: 'Insert options', canPickMany: true, placeHolder: 'Enter confirms; Escape cancels. Placement uses the Snippet default mode.' });
+		if (!toggles) { return; }
+		return { attribution, identityMarkers: toggles.some(item => item.value === 'identityMarkers'), preview: toggles.some(item => item.value === 'preview') };
 	}
 	private async importArchive(): Promise<void> {
 		if (this.busy || this.rootsDirty) { throw new Error('Finish library operations / Reload before Import.'); }
@@ -285,7 +317,7 @@ export class LibraryController implements vscode.Disposable {
 		const action = message.action;
 		if (action === 'detectExports') {
 			const seed = this.panel.current?.seed, session = this.panel.session; if (!seed || seed.kind !== 'snippet') { throw new Error('Open a Snippet metadata form.'); }
-			if (!this.csharp.configured) { throw new Error(this.csharp.client.status + ' Configure a trusted optional helper in Settings.'); }
+			const status = await this.csharp.availability(); if (!status.available) { throw new Error(status.reason); }
 			const sources = seed.asset ? [...(await this.library.sources(seed.asset, seed.asset.metadata.sources)).values()] : this.creation ? [this.creation.bytes] : [];
 			if (!sources.length || seed.asset && seed.asset.metadata.sources.some(name => !name.toLowerCase().endsWith('.cs')) || !seed.asset && seed.language !== 'csharp') { throw new Error('Export detection requires C# sources. New Snippets can be saved/opened as C# before detecting.'); }
 			const result = await this.csharp.analyze(sources.map(bytes => { if (bytes.includes(0)) { throw new Error('Binary source.'); } return new TextDecoder('utf-8', { fatal: true }).decode(bytes); }));
@@ -332,7 +364,7 @@ export class LibraryController implements vscode.Disposable {
 		if (action === 'cancel') { this.creation = undefined; const asset = this.panel.current?.asset; if (asset) { await this.showDetails(asset); } else { this.panel.dispose(); } return; }
 		if (action === 'source') { if (typeof message.key !== 'string' || typeof message.source !== 'string') { throw new Error('Invalid source.'); } await this.openSource(this.find(message.key), message.source); return; }
 		if (action === 'rawMetadata') { if (typeof message.key !== 'string') { throw new Error('Invalid item.'); } const asset = this.find(message.key); const filename = asset.metadata.kind + '.json'; await this.library.stores(asset.root).read(asset.relativePath + '/' + filename, 1024 * 1024); await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(this.assetUri(asset, filename)), { preview: false }); return; }
-		if (['details', 'edit', 'favorite', 'copyWorkspace', 'copyGlobal', 'delete', 'insert', 'upgrade', 'compare', 'exportPack'].includes(String(action))) {
+		if (['details', 'edit', 'favorite', 'copyWorkspace', 'copyGlobal', 'delete', 'insert', 'insertWithOptions', 'upgrade', 'compare', 'exportPack'].includes(String(action))) {
 			if (typeof message.key !== 'string') { throw new Error('Invalid item.'); } this.find(message.key);
 			await vscode.commands.executeCommand(prefix + action, message.key);
 		}
