@@ -50,6 +50,11 @@ test('real helper protocol, structured results, reuse, idle shutdown, restart an
 		assert.equal((await client.request('analyze', docs())).result.syntaxValid, true);
 	} finally { client.dispose(); } assert.equal(client.running, false); await assert.rejects(client.request('analyze', docs()), /disposed/);
 });
+test('a completed response admits the next sequential request without a helper task-completion race', optional, async () => {
+	const client = new CSharpClient({ dll });
+	try { for (let index = 0; index < 200; index++) { const result = await client.request('analyze', docs('class Sequential' + index + ' {}')); assert.equal(result.result.exports[0].name, 'Sequential' + index); } }
+	finally { client.dispose(); }
+});
 test('timeout/cancel/concurrency/crash/malformed/size/mismatch failures are bounded and terminate helper', optional, async () => {
 	for (const scenario of ['crash', 'hang', 'malformed', 'version', 'id', 'shape', 'oversize', 'stderr']) {
 		const client = new CSharpClient({ dll: fixture, timeoutMs: scenario === 'hang' ? 400 : 4000 });

@@ -30,3 +30,12 @@ test('packaged helper auto discovery is trust-bound, no personal paths or runtim
 	const root=path.resolve('test-extension'); assert.equal(helperLocation(root,'auto','',true),path.join(root,'resources','csharp','Tcp.CSharp.dll'));
 	assert.equal(helperLocation(root,'auto','',false),''); assert.equal(helperLocation(root,'disabled','',true),''); assert.equal(helperLocation(root,'custom','relative.dll',true),'');
 });
+test('notice deduplication preserves repeated lines and paragraph order inside each complete notice', async () => {
+	for (const language of ['javascript', 'python', 'html']) {
+		const notice = 'Repeated\nMiddle\nRepeated';
+		const output = await attachAttribution('body', language, [notice, notice], []);
+		assert.equal(output.split('TCP License: Repeated').length - 1, 2);
+		assert.ok(output.indexOf('TCP License: Middle') > output.indexOf('TCP License: Repeated'));
+		assert.ok(output.lastIndexOf('TCP License: Repeated') > output.indexOf('TCP License: Middle'));
+	}
+});

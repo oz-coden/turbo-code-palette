@@ -18,6 +18,8 @@ publication, GitHub Release, tag or v1.0.0 promotion was performed.
   Known license notices are independent; generic headers label every notice line
   `TCP License:` so later syntax transforms can recognize them. HTML has a bounded
   safe comment renderer; unsupported syntax/selection context stops output.
+  Notice deduplication is per complete text; repeated lines/paragraph order within
+  a notice are retained (regression-tested for JavaScript, Python and HTML).
 - Reused dependencies contribute the actual verified revision's citations, not a
   resolver-selected alternate revision's URL. Their recursive recorded origins and
   known original Pack notices are retained; referenced assets are revalidated.
@@ -39,6 +41,11 @@ publication, GitHub Release, tag or v1.0.0 promotion was performed.
   QA profile; non-Windows smoke profiles now use short temporary directories. A
   Windows form-to-editor Undo harness race now waits for focus to settle and the
   target's document-change event, still issuing exactly one Undo without retry.
+- macOS found a real helper admission race: a client could receive a completed
+  response before the worker Task's completion flag became visible, then receive
+  `helper-busy` for its sequential successor. Response publication and slot release
+  now share an admission semaphore, preserving cancellation and one active analysis.
+  A 200-request sequential protocol regression covers the boundary on every CI OS.
 - Added changelog, user guide, known issues, pending-license notice and bundled Roslyn
   notices. Package license stays UNLICENSED: MIT is the owner's preferred candidate,
   with final grant to be reconsidered before formal release.
@@ -79,7 +86,7 @@ human usability/action counts or an accessibility certification.
 
 ## Tests and platforms
 
-- Windows x64 local: unit/security **137**, Roslyn **28**; generated semantic Bundle
+- Windows x64 local: unit/security **139**, Roslyn **28**; generated semantic Bundle
   compiles with dotnet and executes with output **42**. Type checking/lint pass.
 - Minimum VS Code **1.134.0** and official current stable **1.142.0** run the Host
   suite (80 cases after the final dependency-attribution regression was added).
@@ -104,7 +111,7 @@ of a runtime is separate; TCP never downloads/installs .NET. Workspace trust is 
 
 | Option | Measured files/bytes | Setup / maintenance |
 |---|---:|---|
-| Phase 7 optimized framework-dependent | 5 / 9,973,046 | Portable managed code; existing runtime needed. No DLL-path input. Single helper payload for supported .NET OS/architectures. |
+| Phase 7 optimized framework-dependent | 5 / 9,974,070 | Portable managed code; existing runtime needed. No DLL-path input. Single helper payload for supported .NET OS/architectures. |
 | Phase 6 framework-dependent baseline, translations/debug included | 33 / 16,826,489 | Historical comparison baseline |
 | Phase 6 self-contained win-x64 baseline | 220 / 97,376,869 | No shared runtime needed; each OS/architecture needs a distinct package, runtime security updates and separate tests. Other self-contained RIDs unverified. |
 
@@ -114,10 +121,10 @@ No self-contained runtime is included in the candidate VSIX. Satellite diagnosti
 translations/apphost/PDBs are excluded; helper diagnostics are English.
 
 Local representative timing (single machine; not a general SLA): cold framework
-request **460.85 ms** (one sample), warm Snippet median **1.32 ms** / 20 requests,
-500-type file median **56.36 ms** / 5, references **2.80 ms** / 5, Bundle Emit
-**10.32 ms** / 5. Working set about **139–182 MB** during this run. The cached Phase 6
-self-contained sample cold probe was **835.52 ms** (one sample). Lifetime/concurrency
+request **467.48 ms** (one sample), warm Snippet median **1.30 ms** / 20 requests,
+500-type file median **57.20 ms** / 5, references **2.95 ms** / 5, Bundle Emit
+**9.61 ms** / 5. Working set about **138–183 MB** during this run. The cached Phase 6
+self-contained sample cold probe was **482.46 ms** (one sample). Lifetime/concurrency
 limits and idle shutdown remain unchanged; no stale source cache was introduced.
 
 ## VSIX and repository security

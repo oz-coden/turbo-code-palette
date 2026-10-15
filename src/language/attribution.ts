@@ -19,13 +19,14 @@ export function collectAttribution(snippets: readonly MetadataDocument[], notice
 /** Submission citations are independent of optional TCP identity markers. */
 export async function attachAttribution(text: string, language: string, notices: readonly string[], urls: readonly string[], provider?: AttributionLanguageProvider, details: readonly string[] = [], fragment?: CleanFragment): Promise<string> {
 	if (!notices.length && !urls.length && !details.length) { return text; }
+	// Deduplicate whole notices, never their individual lines or paragraphs.
+	const entries = [...new Set(urls)].map(url => 'Source URL: ' + url).concat([...new Set(details)], [...new Set(notices)].flatMap(notice => notice.split(/\r\n|\r|\n/).map(line => 'TCP License: ' + line)));
 	if (fragment && (fragment.start !== 0 || fragment.end !== fragment.fullText.length)) {
-		const header = renderLicenseHeader([...new Set([...urls.map(url => 'Source URL: ' + url), ...details, ...notices.flatMap(notice => notice.split(/\r\n|\r|\n/).map(line => 'TCP License: ' + line))])], fragment);
+		const header = renderLicenseHeader(entries, fragment);
 		if (header === undefined) { throw new Error('Attribution/license comment placement cannot be proven for this selection. Output stopped.'); }
 		return header + text;
 	}
 	if (provider?.languages.has(language) && provider.configured && provider.header) { return provider.header(text, notices, urls, details); }
-	const entries = [...new Set([...urls.map(url => 'Source URL: ' + url), ...details, ...notices.flatMap(notice => notice.split(/\r\n|\r|\n/).map(line => 'TCP License: ' + line))])];
 	if (language === 'html') {
 		if (entries.some(entry => entry.includes('--') || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u0085\u2028\u2029]/u.test(entry))) { throw new Error('Attribution/license cannot be encoded as a safe HTML comment. Output stopped.'); }
 		const bom = text.startsWith('\uFEFF') ? '\uFEFF' : ''; return bom + entries.map(entry => '<!-- ' + entry + ' -->\n').join('') + text.slice(bom.length);

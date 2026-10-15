@@ -7,6 +7,8 @@ Console.InputEncoding = new UTF8Encoding(false, true);
 Console.OutputEncoding = new UTF8Encoding(false);
 var json = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 var outputLock = new SemaphoreSlim(1);
+var stateLock = new SemaphoreSlim(1);
+var busy = false;
 Task? active = null;
 CancellationTokenSource? cancellation = null;
 string? activeId = null;
@@ -16,6 +18,13 @@ async Task Reply(object value) {
     await outputLock.WaitAsync();
     try { await Console.Out.WriteLineAsync(line); await Console.Out.FlushAsync(); }
     finally { outputLock.Release(); }
+}
+async Task Complete(object value) {
+    // A response becomes observable before its Task necessarily completes.
+    // Serialize publication and slot release with the reader's admission check.
+    await stateLock.WaitAsync();
+    try { await Reply(value); busy = false; }
+    finally { stateLock.Release(); }
 }
 try {
     var reader = Console.OpenStandardInput(); var buffer = new byte[4096]; var line = new MemoryStream();
@@ -32,19 +41,23 @@ try {
             if (id.Length is < 1 or > 80 || request.GetProperty("protocolVersion").GetInt32() != 1) throw new InvalidOperationException("protocol-mismatch");
             var operation = request.GetProperty("operation").GetString();
             if (operation == "cancel") { if (id == activeId) cancellation?.Cancel(); continue; }
-            if (active is { IsCompleted: false }) { await Reply(new { protocolVersion = 1, id, ok = false, diagnostics = new[] { "helper-busy" }, result = (object?)null }); continue; }
-            cancellation?.Dispose(); cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(15)); activeId = id;
-            var token = cancellation.Token;
-            active = Task.Run(async () => {
+            await stateLock.WaitAsync();
+            try {
+              if (busy) { await Reply(new { protocolVersion = 1, id, ok = false, diagnostics = new[] { "helper-busy" }, result = (object?)null }); continue; }
+              busy = true;
+              cancellation?.Dispose(); cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(15)); activeId = id;
+              var token = cancellation.Token;
+              active = Task.Run(async () => {
                 try {
                     var watch = System.Diagnostics.Stopwatch.StartNew();
                     var result = Engine.Execute(operation ?? "", request.GetProperty("input"), token);
-                    await Reply(new { protocolVersion = 1, id, ok = true, diagnostics = result.Diagnostics, result = result.Value, metrics = new { elapsedMs = watch.Elapsed.TotalMilliseconds, workingSetBytes = Environment.WorkingSet, managedBytes = GC.GetTotalMemory(false) } });
+                    await Complete(new { protocolVersion = 1, id, ok = true, diagnostics = result.Diagnostics, result = result.Value, metrics = new { elapsedMs = watch.Elapsed.TotalMilliseconds, workingSetBytes = Environment.WorkingSet, managedBytes = GC.GetTotalMemory(false) } });
                 } catch (Exception error) when (error is not OutOfMemoryException) {
                     // No source, paths or exception stacks in protocol diagnostics.
-                    await Reply(new { protocolVersion = 1, id, ok = false, diagnostics = new[] { error is OperationCanceledException ? "cancelled" : "analysis-refused: " + error.Message }, result = (object?)null });
+                    await Complete(new { protocolVersion = 1, id, ok = false, diagnostics = new[] { error is OperationCanceledException ? "cancelled" : "analysis-refused: " + error.Message }, result = (object?)null });
                 }
-            }, CancellationToken.None);
+              }, CancellationToken.None);
+            } finally { stateLock.Release(); }
         }
     }
     cancellation?.Cancel(); if (active != null) await active;
