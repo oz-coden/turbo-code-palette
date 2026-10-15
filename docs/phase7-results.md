@@ -95,8 +95,20 @@ human usability/action counts or an accessibility certification.
   Development Host path, not repository source. This distinguishes it from testing
   only a development checkout. Packaged DLL auto-discovery/analysis succeeds.
 - CI was expanded to Windows/Linux/macOS unit/Roslyn/Bundle checks and minimum/current
-  Host + VSIX installation checks. Final remote job results are recorded below after
-  completion; matrix configuration alone is not proof that a platform passed.
+  Host + VSIX installation checks. The final implementation commit
+  [204e9b5](https://github.com/oz-coden/turbo-code-palette/commit/204e9b560d9b91a8833356ba526d800742aa02f5)
+  passed **all 9 jobs** in [this completed CI run](https://github.com/oz-coden/turbo-code-palette/actions/runs/38771336715).
+
+| Verified environment | Unit / Roslyn / Bundle compile | VS Code 1.134.0 Host / VSIX | VS Code 1.142.0 Host / VSIX |
+|---|---|---|---|
+| Windows x64 — local and CI | 139 / 28 / passed, output 42 | 80 / passed | 80 / passed |
+| Linux x64 — CI | 139 / 28 / passed, output 42 | 80 / passed | 80 / passed |
+| macOS arm64 — CI | 139 / 28 / passed, output 42 | 80 / passed | 80 / passed |
+
+CI builds and installs its candidate on each OS. A single Windows-built archive was
+not transferred to the other OS runners; byte-for-byte reproducible packaging is
+not claimed. The managed framework-dependent payload has no bundled native runtime.
+
 - Other architectures, Remote/WSL/container hosts, actual mouse and assistive technology
   are not claimed as verified.
 
@@ -111,7 +123,7 @@ of a runtime is separate; TCP never downloads/installs .NET. Workspace trust is 
 
 | Option | Measured files/bytes | Setup / maintenance |
 |---|---:|---|
-| Phase 7 optimized framework-dependent | 5 / 9,974,070 | Portable managed code; existing runtime needed. No DLL-path input. Single helper payload for supported .NET OS/architectures. |
+| Phase 7 optimized framework-dependent, local Windows build | 5 / 9,974,070 | Portable managed code; existing runtime needed. No DLL-path input. Single helper payload for supported .NET OS/architectures. |
 | Phase 6 framework-dependent baseline, translations/debug included | 33 / 16,826,489 | Historical comparison baseline |
 | Phase 6 self-contained win-x64 baseline | 220 / 97,376,869 | No shared runtime needed; each OS/architecture needs a distinct package, runtime security updates and separate tests. Other self-contained RIDs unverified. |
 
@@ -133,6 +145,9 @@ Candidate VSIX contains 21 allowlisted files, approximately 3.51 MiB compressed.
 Includes production JS, required media/schemas, guide/known issues, license status,
 third-party notices and the five helper files. It excludes source/tests, Node packages,
 logs, Global/Workspace data, build trees, PDBs, credentials and QA profiles.
+The local tested candidate is **3,677,927 bytes**, SHA-256
+`8bc31163c0c2fd7fd024650d5bf2a3a2c1104269c041407f12918bb0e5173612`.
+It is an ignored local artifact, not a formal release upload.
 
 The first packaging audit found a local build path in the helper's CodeView debug
 record despite a non-debug publish request (incremental build reuse). Packaging now
@@ -160,12 +175,31 @@ license completeness or submission eligibility is certified.
 ## Release decision / remaining gates
 
 **Hold formal v1 release.** Local technical/package checks provide a development
-candidate, not final release approval. Blocking gates are final license grant,
-manual GUI/keyboard/accessibility QA and successful completion/review of the expanded
-platform CI. Arm/remote support and runtime distribution variants need separately
+candidate, not final release approval. Blocking gates are final license grant and
+manual GUI/keyboard/accessibility QA. The expanded platform CI passed; other
+architectures/remote support and runtime distribution variants need separately
 scoped evidence if advertised. Existing known limits remain: new-folder files outside
 editor Undo, no mixed transaction, standalone C# limits, review-only generic Bundle,
 no D&D and no auto Save version bump. See [known issues](known-issues.md).
 
 Large provenance evidence integrations, a dedicated Policy form and broader semantic
 providers remain follow-up proposals rather than silently expanded Phase 7 scope.
+
+### Manual QA still required before release approval
+
+- Use real mouse and keyboard separately for JS, Python and HTML create/search/Insert,
+  including the sidebar arrow, context menu, Command Palette and Pack member button.
+  Record actual action counts and verify one Ctrl+Z in the destination editor.
+- Traverse metadata/Pack forms with Tab/Shift+Tab, test Escape/cancel, recover from an
+  invalid version/conflict through native Diff, and verify the original target survives
+  central-panel/Quick Pick focus changes. Confirm no C# setup or policy is required.
+- Exercise archive file dialogs, Global/Workspace copy, favorites/recent, external
+  Save → Later → Reload → explicit revision, and the Settings entry points.
+- Inspect all Clean Copy presets and Preview/Clipboard/new-file outputs, including
+  unsupported language/unsafe attribution errors. Verify Source URLs and complete
+  multiline notices with optional markers both ON and OFF.
+- With an already available C# runtime, check structural Insert/semantic Bundle and
+  provider-unavailable recovery. Review optional policy forced options and publication
+  warnings; no contest submission or claim of compliance is part of this QA.
+- Test screen-reader labels, focus order, announcement of errors/status and high
+  contrast. Record the actual OS/tool used; static labels are not sufficient evidence.
