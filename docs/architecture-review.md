@@ -345,6 +345,8 @@ licenseNotices[].textは収集/dedupし安全な対象言語commentとして出�
 
 ### Phase 6 — C# Roslyn/structure/Bundle
 
+実装結果は[Phase 6結果](phase6-results.md)を参照。optional .NET helperを公開stdin/stdout protocolで接続し、単体runtime参照で検証できる範囲に限定した。Presetとは独立したAtCoder 20261014 Policyを追加し、source[].urlを出典URLの正本とする。事前Web公開の証跡確認と専用Policy formは別の後続候補であり、準拠認証は提供しない。
+
 - 目標/ファイル: csharp helper/client/protocol、bundle、syntax clean。
 - テスト: namespace/type/member/top-level、generic/partial/overload、using各形式、raw/interpolated string、preprocessor/parse error、collision/曖昧export、missing runtime/crash/cancel、参照→閉包。
 - 合格: 合法targetへ配置、不明な構造へ黙って挿入しない。代表的Bundle fixtureをdotnet compileし結果確認、source不変、.NETなしで基本TCP起動。

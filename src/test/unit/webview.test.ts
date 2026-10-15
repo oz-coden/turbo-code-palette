@@ -10,7 +10,7 @@ function renderer(fresh: boolean, inputs: Input[], dependency = false): { save: 
 		querySelector: () => ({ value: 'code.cs' }), addEventListener: (name: string, listener: (event: unknown) => void) => events.set(name, listener) };
 	runInNewContext(script, {
 		acquireVsCodeApi: () => ({ postMessage: (message: Record<string, unknown>) => messages.push(message) }),
-		document: { body: { dataset: { token: 'test-session' } }, querySelector: (selector: string) => selector === '#metadata' ? form : {}, addEventListener: () => {},
+		document: { body: { dataset: { token: 'test-session' } }, querySelector: (selector: string) => selector === '#metadata' ? form : selector === '#exports-json' ? { value: '[]' } : {}, addEventListener: () => {},
 			querySelectorAll: (selector: string) => selector === '[data-member]' ? [] : dependency ? [{ dataset: { index: '0', id: 'dependency-id', name: 'Dependency' }, querySelector: () => ({ value: '>=v1.0.0' }) }] : [] },
 		window: { addEventListener: () => {} },
 	});

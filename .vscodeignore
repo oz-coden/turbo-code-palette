@@ -27,3 +27,4 @@ test-results/**
 .tcp-staging/**
 .tcp-transactions/**
 .tcp-insert-*/**
+csharp/**

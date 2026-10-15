@@ -17,6 +17,10 @@ import type { UserState } from './userState';
 import { ConflictError } from '../core/conflict';
 import { markSource, markerEvidence, sourceLanguage } from '../language/sourceMarker';
 import { ComparisonDocuments } from '../ui/comparison';
+import type { CSharpProvider } from '../language/csharpProvider';
+import { collectNotices } from '../core/clean/pipeline';
+import { attribution, type CompliancePolicy } from '../core/compliance';
+import { attachAttribution } from '../language/attribution';
 
 export interface InsertionInteractions {
 	input(asset: AssetLocation, variable: Variable): Promise<string | undefined>;
@@ -42,7 +46,7 @@ export class InsertionPipeline implements vscode.Disposable {
 	readonly interactions: InsertionInteractions;
 	lastPlan?: InsertionPlan;
 	private comparison?: ComparisonDocuments;
-	constructor(private readonly library: Library, private readonly state: UserState, private readonly rootGuard: () => void = () => {}, interactions?: InsertionInteractions, private readonly sharedComparison?: ComparisonDocuments) {
+	constructor(private readonly library: Library, private readonly state: UserState, private readonly rootGuard: () => void = () => {}, interactions?: InsertionInteractions, private readonly sharedComparison?: ComparisonDocuments, private readonly csharp?: CSharpProvider) {
 		this.comparison = sharedComparison;
 		this.interactions = interactions ?? {
 			input: async (asset, variable) => {
@@ -94,6 +98,9 @@ export class InsertionPipeline implements vscode.Disposable {
 		if (this.busy) { throw new Error('Another insertion is collecting inputs or applying. Finish it first.'); } this.busy = true; this.lastPlan = undefined;
 		try {
 			this.rootGuard(); const snapshot = this.library.catalog.snapshot, stamp = rootStamp(this.library), document = await this.validateTarget(request);
+			const config = vscode.workspace.getConfiguration('turboCodePalette'), policy = config.get<CompliancePolicy>('compliancePolicy', 'none');
+			const settingsStamp = (c: vscode.WorkspaceConfiguration) => JSON.stringify(['compliancePolicy', 'atcoderContestStartsAt', 'csharpHelperPath', 'csharpLanguageVersion', 'csharpDefines'].map(key => c.get(key))), policyStamp = settingsStamp(config);
+			const roslyn = document.languageId === 'csharp' && this.csharp?.configured ? this.csharp : undefined;
 			if (!snapshot || !snapshot.snippets.some(asset => locationKey(asset) === locationKey(request.asset) && asset.integrityHash === request.asset.integrityHash)) { throw new Error('Asset is no longer in the catalog. Reload and select again.'); }
 			const root = request.asset, pack = snapshot.packs.find(asset => sameRoot(asset.root, root.root) && asset.relativePath === packOf(root));
 			if (!pack?.usable) { throw new Error('Pack is not eligible for insertion.'); }
@@ -106,6 +113,7 @@ export class InsertionPipeline implements vscode.Disposable {
 			await this.assets(ordered);
 			const before = document.getText(), uri = document.uri.toString(), history = this.receipts.get(uri) ?? [], verified = [...history].reverse().find(receipt => receipt.text === before);
 			if (before.length > 16 * 1024 * 1024) { throw new Error('Target text limit exceeded.'); }
+			const markers = roslyn ? await roslyn.markers(before) : markerEvidence(before, document.languageId);
 			const skipped: AssetLocation[] = [], items: { asset: AssetLocation; mode: InsertMode; sources: string[] }[] = [], warnings = [...closure.warnings];
 			const canSkip = (asset: AssetLocation) => {
 				const receipt = verified?.implementations.get(asset.metadata.id!); if (!receipt) { return false; }
@@ -121,12 +129,12 @@ export class InsertionPipeline implements vscode.Disposable {
 				if (canSkip(asset)) { skipped.push(asset); continue; }
 				if (receipt) { throw new ConflictError('Existing insertion uses a different version/content. Comparison is required.', { currentText: before, requestedText: [...(await this.library.sources(asset, asset.metadata.sources)).values()].map(bytes => decoder.decode(bytes)).join('\n') }); }
 				const bytes = await this.library.sources(asset, asset.metadata.sources), raw = asset.metadata.sources.map(source => { const buffer = bytes.get(source)!; if (buffer.includes(0)) { throw new Error('Binary source is not insertable.'); } return decoder.decode(buffer); });
-				if (markerEvidence(before, document.languageId).some(marker => marker.id.toLowerCase() === asset.metadata.id)) { throw new ConflictError('Source marker indicates a possible existing implementation. Compare content; a marker alone cannot establish compatibility.', { currentText: before, requestedText: raw.join('\n') }); }
+				if (markers.some(marker => marker.id.toLowerCase() === asset.metadata.id)) { throw new ConflictError('Source marker indicates a possible existing implementation. Compare content; a marker alone cannot establish compatibility.', { currentText: before, requestedText: raw.join('\n') }); }
 				const variables = templateInputs(asset.metadata.document, raw), values = new Map<string, string>();
 				for (const variable of variables) { const value = await this.interactions.input(asset, variable); if (value === undefined) { return 'cancelled'; } validateValue(variable, value); values.set(variable.name, value); }
 				const sources = raw.map(source => substitute(source, variables, values));
-				const policy = modePolicy(asset.metadata.document, { structure: supportsStructure(document.languageId, asset.metadata.document), files: !!vscode.workspace.workspaceFolders?.some(folder => folder.uri.scheme === 'file') });
-				if (!policy.available.length) { throw new Error('No available insertion mode for this asset/target.'); }
+				const policy = modePolicy(asset.metadata.document, { structure: !!roslyn || supportsStructure(document.languageId, asset.metadata.document), files: !!vscode.workspace.workspaceFolders?.some(folder => folder.uri.scheme === 'file') });
+				if (!policy.available.length) { throw new Error('No available insertion mode for this asset/target. C# structure-aware requires the optional semantic provider.'); }
 				let mode: InsertMode | undefined;
 				if (asset === root && request.mode && request.mode !== 'choose') { if (!policy.available.includes(request.mode)) { throw new Error('Requested mode is denied or unsupported.'); } mode = request.mode; }
 				else { mode = asset === root && request.mode === 'choose' ? undefined : policy.preferred; }
@@ -136,10 +144,10 @@ export class InsertionPipeline implements vscode.Disposable {
 				items.push({ asset, mode, sources });
 			}
 			if (!items.length) { return 'already-present'; }
-			try { validateCollisions(before, items.filter(item => item.mode !== 'separate-files').map(item => ({ name: item.asset.metadata.name!, exports: exportNames(item.asset.metadata.document), sources: item.sources }))); }
+			try { validateCollisions(before, items.filter(item => item.mode !== 'separate-files').map(item => ({ name: item.asset.metadata.name!, exports: roslyn ? [] : exportNames(item.asset.metadata.document), sources: item.sources }))); }
 			catch (error) { throw new ConflictError((error as Error).message, { currentText: before, requestedText: items.flatMap(item => item.sources).join('\n') }); }
 			// A single implementation cannot introduce duplicate declared exports in this batch either.
-			try { validateCollisions('', items.map(item => ({ name: item.asset.metadata.name!, exports: exportNames(item.asset.metadata.document), sources: [] }))); }
+			try { validateCollisions('', items.filter(item => !roslyn || item.mode === 'separate-files').map(item => ({ name: item.asset.metadata.name!, exports: exportNames(item.asset.metadata.document), sources: [] }))); }
 			catch (error) { throw new ConflictError((error as Error).message, { currentText: before, requestedText: items.flatMap(item => item.sources).join('\n') }); }
 			if (vscode.workspace.getConfiguration('turboCodePalette').get<boolean>('sourceMarkers', false)) {
 				const eol = document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n', selection = request.target!.selection;
@@ -162,15 +170,33 @@ export class InsertionPipeline implements vscode.Disposable {
 				output = { ...destination, files }; this.validateOutputRoot(output); await validateDestination(output);
 			} else {
 				const selection = request.target!.selection;
-				edits = planText(before, { start: document.offsetAt(selection.start), end: document.offsetAt(selection.end), active: document.offsetAt(selection.active) }, items, document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n');
+				if (roslyn && items.some(item => item.mode === 'structure-aware')) {
+					if (items.some(item => item.mode !== 'structure-aware')) { throw new Error('C# structural and offset modes cannot be mixed in one plan. Select compatible modes for the closure.'); }
+					let planned = before;
+					// Dependency order is retained at a common boundary by planning the batch as one fragment.
+					const targets = items.map(item => (item.asset.metadata.document.node(['insert', 'targets'])?.children ?? []).map(node => node.value as string));
+					const common = targets[0].filter(target => targets.every(list => list.includes(target)));
+					const placed = await roslyn.place(planned, items.flatMap(item => item.sources).join('\n'), document.offsetAt(selection.active), common); warnings.push(...placed.diagnostics);
+					if (placed.result.offset > before.length) { throw new Error('Invalid C# placement response.'); }
+					planned = planned.slice(0, placed.result.offset) + placed.result.text + planned.slice(placed.result.offset); edits = [{ start: 0, end: before.length, text: planned }];
+				} else { edits = planText(before, { start: document.offsetAt(selection.start), end: document.offsetAt(selection.end), active: document.offsetAt(selection.active) }, items, document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n'); }
 			}
-			const after = applyText(before, edits); if (after.length > 32 * 1024 * 1024) { throw new Error('Planned text limit exceeded.'); }
+			const origins = attribution(items.map(item => item.asset.metadata.document), policy, config.get<string>('atcoderContestStartsAt')); warnings.push(...origins.warnings);
+			const notices = collectNotices([...items.map(item => item.asset.metadata.document), pack.metadata.document]);
+			let after = applyText(before, edits);
+			if (output) { const files = new Map<string, string>(); for (const [name, source] of output.files) { files.set(name, await attachAttribution(source, sourceLanguage(name), notices, origins.urls, this.csharp)); } output = { ...output, files }; }
+			else {
+				after = await attachAttribution(after, document.languageId, notices, origins.urls, this.csharp); if (after !== applyText(before, edits)) { edits = [{ start: 0, end: before.length, text: after }]; }
+				if (roslyn) { try { warnings.push(...await roslyn.validate(after)); } catch (error) { throw new ConflictError('C# syntax/binding/collision validation stopped the plan: ' + (error as Error).message, { currentText: before, requestedText: after }); } }
+			}
+			if (after.length > 32 * 1024 * 1024) { throw new Error('Planned text limit exceeded.'); }
 			const plan: InsertionPlan = { assets: items.map(item => item.asset), skipped, warnings, edits, output, before, after }; this.lastPlan = plan;
 			if (warnings.length) { const confirmed = this.interactions.warnings ? await this.interactions.warnings(warnings) : await vscode.window.showWarningMessage(warnings.join('\n'), { modal: true }, 'Continue') === 'Continue'; if (!confirmed) { return 'cancelled'; } }
 			if (vscode.workspace.getConfiguration('turboCodePalette').get<boolean>('previewBeforeInsert', false) && !await this.interactions.preview(plan)) { return 'cancelled'; }
 			// Show/reacquire the captured editor before final validation, never use current focus as a target.
 			const editor = output ? undefined : await vscode.window.showTextDocument(document, { preview: false });
 			const revalidate = async () => {
+				const current = vscode.workspace.getConfiguration('turboCodePalette'); if (policyStamp !== settingsStamp(current)) { throw new Error('Compliance policy / C# options changed while planning. Insert again.'); }
 				this.rootGuard(); if (rootStamp(this.library) !== stamp || this.library.catalog.snapshot !== snapshot) { throw new Error('Catalog/root changed while planning. Insert again.'); }
 				await this.assets(ordered); await this.validateTarget(request);
 				if (document.getText() !== before) { throw new Error('Target changed while planning. Insert again.'); }

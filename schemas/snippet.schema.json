@@ -6,6 +6,8 @@
   "required": ["sources"],
   "additionalProperties": true,
   "properties": {
+    "provenance": {"type":"object","additionalProperties":true,"properties":{"aiUsage":{"type":"string","description":"Origin assertion: used / not-used / unknown. Open metadata; TCP never certifies this assertion."}}},
+    "source": {"type":"array","description":"Canonical source citations. repository[] remains a repository location, not duplicated citation storage.","items":{"type":"object","additionalProperties":true,"properties":{"url":{"type":"string"},"publication":{"type":"string","description":"Declared public / private / unknown; not independently verified."},"publishedAt":{"type":"string","description":"Declared ISO 8601 publication timestamp with timezone; must identify the cited code revision."}}}},
     "sources": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "description": "Existing files relative to the Snippet folder; runtime additionally checks containment, portable names, links and limits." },
     "dependencies": {
       "type": "array",

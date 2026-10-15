@@ -45,13 +45,25 @@ previewを有効にすると、任意のCompareからVS Code標準Diffでcurrent
 
 TCP sidebarの**Clean Copy** section、またはCommand Paletteの`Clean Copy`からSelection / Current File / Dependency Bundleを選びます。Readable / Competitive / Customを選び、Clipboard / Preview・Untitled / Save Asへ出力します。原本は変更しません。Previewと出力は同じ固定final planを使います。
 
-ReadableとCompetitiveは現在同じ安全なtransformだけです。対応providerで確認できるTCP marker commentの内容だけを除去し、改行・通常comment・whitespaceを残します。Customは現在利用可能なtransformだけを選択できます。未対応のcomment除去、using削除、rename、minify等へのfallbackはありません。
+helperなしのReadableとCompetitiveは同じ安全なtransformだけです。対応providerで確認できるTCP marker commentの内容だけを除去し、改行・通常comment・whitespaceを残します。C# Roslyn providerではCompetitiveに、単体semantic解析で証明できるunused using除去と安全なwhitespace normalizationを追加します。Customは利用可能なtransformだけを選択でき、C#ではsyntax-awareな通常comment/XML doc除去も選べます。unsafeなrename、minify等へのfallbackはありません。
 
 `licenseNotices[].text`はexact textでdeduplicateし、全Presetで保持します。対応providerの安全なcomment headerで再付与できなければ出力を停止します。未対応言語へ別言語のcommentを強制しません。TCPはnoticeを法的に除去できるか判断しません。
 
-**Dependency BundleはPhase 5ではreview用JSONです。実行可能なcode mergeではありません。** known exportのtext hitはstring/commentも含み得るため自動採用せず、Snippetを明示選択します。各Pack内部のmetadata依存を既存resolverで解決し、dependency-firstでcurrent fileとsourceを分離収録します。templateはsource dataのまま。C#のsemantic reference解決・compile可能なBundleはPhase 6へ残しています。
+**generic Dependency Bundleはreview用JSONです。** known exportのtext hitは自動採用せずSnippetを明示選択します。C# helper有効時はsemantic single-file Bundleも選択できます。実symbol referencesをreview済みexportsへ対応付け、同じmetadata resolverでclosureを取得し、構文nodeから構築して単体compilation/Emitを検証します。未解決参照、複数revision、異なるusing scopes、directive等は停止します。元workspace/projectをbuildする機能はありません。
 
 Save Asはnative filesystemの新規filenameだけです。source URI、projected Untitled source、library内、既存file、case/Unicode alias、symlink/junction親を拒否します。exclusive publishにはhardlink対応filesystemが必要です。preview中の編集・Reload・root/provider変更・asset変更時は出力を止めます。Clean Copyはusage/recent等を更新しません。
+
+## Optional C# / AtCoder Policy
+
+TCP本体は.NET非依存です。Roslyn helperを使う場合だけ.NET 10 SDKで`npm run build:csharp`し、VS Code Settingsの`csharpHelperPath`へ信頼するDLLのローカル絶対pathを設定してReload Windowします。設定はmachine専用でrepositoryへcommitしません。`C# Provider Status`で利用不能理由を確認でき、`Cancel Current C# Operation`で中止できます。helper未設定なら従来のgeneric機能を使えます。helperのsource・protocol・制限は[csharp/README.md](csharp/README.md)を参照。
+
+Snippet作成/metadata編集formのAdvancedからC# exports候補を検出し、確認・編集して保存できます。source code自体は通常editorで編集します。structure-aware Insertは明示insert.targetsとRoslynのsyntax/semantic検証を使用し、不明な場所へfallbackしません。project評価は行わず、明示language version/definesがなければC# 14単体解析の限界をdiagnosticで知らせます。
+
+[AtCoder公式20261014変更](https://github.com/atcoder/rules/commit/61500f0afb842798a5ab626725350059540bec04)に対応する共通基盤として、Presetと独立した`compliancePolicy: atcoder-20261014`をSettingsで選べます。既定はnone。参照URLは既存`source[].url`、AI由来の申告は`provenance.aiUsage`、公開申告は`source[].publication/publishedAt`をraw metadataで扱います。repository[]はrepository所在地のままです。AI/unknown由来には、URLと明示contest開始以前のpublic公開申告が必要です。
+
+Insert/Clean Copy/Bundleでは出典URLとlicense noticeを収集・保持します。Source URL commentはoptional TCP BEGIN/END markerとは別で、marker OFFでも付加します。AtCoder Policyでは将来の未知transformを拒否し、未分類licenseを失わないよう全non-marker commentを保持します。出典/noticeを保持できない出力は停止します。**Webでの事前公開、申告の真偽、licenseの完全性、提出資格は検証・保証せず、準拠済みとは表示しません。** 専用Policy formと公開日時の証跡検証は後続候補です。
+
+対応範囲、測定値、テスト、残る制限は[Phase 6結果](docs/phase6-results.md)を参照してください。
 
 ## Pack Import / Export
 
@@ -92,7 +104,7 @@ npm run package
 npm run check-public -- --history
 ```
 
-`test:unit`はVS Codeなしのcore/service/security tests、`test`は固定した最低対応版1.134.0のGUI Hostでintegration testsを実行します。`test:host`はインストール済みWindows VS Codeを使い、個人profileを共有しません。別環境ではTCP_VSCODE_EXECUTABLEを指定できます。件数/実行結果はPhase 5結果文書を参照。テスト/downloadにはネットワーク・GUI実行が必要です。GUI Hostはversionごとに単独起動してください。
+`test:unit`はVS Codeなしのcore/service/security tests、`test`は最低対応版1.134.0のGUI Hostです。`test:host`はインストール済みWindows VS Codeを使い個人profileを共有しません。別環境ではTCP_VSCODE_EXECUTABLEを指定できます。任意の.NET testsは`npm run test:csharp`、計測/生成Bundle compile検証は`npm run measure:csharp`です。helper/テストpeerをbuild済みの場合だけNode/Hostの.NETケースも実行し、CIではbuildして省略せず検証します。テスト/downloadにはネットワーク・GUI実行が必要です。GUI Hostはversionごとに単独起動してください。
 
 Research UX Labは除去しました。比較結果と当時のcommitはD&D UX調査文書に残っています。
 

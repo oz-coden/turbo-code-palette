@@ -45,3 +45,27 @@ export function textCleanPlan(fragment: CleanFragment, provider: CleanLanguagePr
 	return Object.freeze({ scope: options.scope, preset: options.preset, text: cleaned.text, language: fragment.language, extension: options.extension,
 		transforms: Object.freeze([...cleaned.transforms, 'preserve-license-notices']), notices: Object.freeze(notices), warnings: Object.freeze([...new Set([...(options.warnings ?? []), ...cleaned.warnings])]), reviewOnly: false });
 }
+
+/** Async providers share the same capability checks, ordered transforms and immutable output contract. */
+export async function cleanFragmentAsync(fragment: CleanFragment, provider: CleanLanguageProvider, preset: CleanPreset, custom?: readonly string[]): Promise<ReturnType<typeof cleanFragment>> {
+	// Validate capture and selection without executing a transform.
+	cleanFragment(fragment, provider, 'Custom', []);
+	const ids = preset === 'Custom' ? custom ?? [] : provider.presets[preset];
+	if (!ids || ids.length > 64 || new Set(ids).size !== ids.length) { throw new Error('Invalid Clean Copy transform pipeline.'); }
+	let text = fragment.fullText.slice(fragment.start, fragment.end); const warnings: string[] = [];
+	for (const id of ids) {
+		const transform = availableTransforms(provider).find(t => t.id === id); if (!transform) { throw new Error('Unsupported transform; no fallback: ' + id); }
+		const result = transform.applyAsync ? await transform.applyAsync(text, fragment) : transform.apply(text, fragment); text = result.text; warnings.push(...result.warnings);
+		if (Buffer.byteLength(text) > 32 * 1024 * 1024) { throw new Error('Clean Copy output limit exceeded.'); }
+	}
+	return { text, transforms: [...ids], warnings };
+}
+export async function textCleanPlanAsync(fragment: CleanFragment, provider: CleanLanguageProvider, options: Parameters<typeof textCleanPlan>[2]): Promise<CleanPlan> {
+	const cleaned = await cleanFragmentAsync(fragment, provider, options.preset, options.custom), notices = [...new Set(options.notices)];
+	if (notices.length) {
+		if (provider.attachNotices) { cleaned.text = await provider.attachNotices(cleaned.text, notices, fragment); }
+		else { const header = provider.capabilities.has('license-comment-header') && provider.licenseHeader?.(notices, fragment); if (typeof header !== 'string') { throw new Error('License notices cannot be safely reattached for this language/selection.'); } cleaned.text = header + cleaned.text; }
+	}
+	if (Buffer.byteLength(cleaned.text) > 32 * 1024 * 1024 || Buffer.from(cleaned.text).toString('utf8') !== cleaned.text) { throw new Error('Invalid/oversized Clean Copy output encoding.'); }
+	return Object.freeze({ scope: options.scope, preset: options.preset, text: cleaned.text, language: fragment.language, extension: options.extension, transforms: Object.freeze([...cleaned.transforms, 'preserve-license-notices']), notices: Object.freeze(notices), warnings: Object.freeze([...new Set([...(options.warnings ?? []), ...cleaned.warnings])]), reviewOnly: false });
+}

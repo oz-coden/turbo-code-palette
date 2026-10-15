@@ -17,6 +17,8 @@
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
+      {"command":"turbo-code-palette.csharpProviderStatus","title":"Turbo Code Palette: C# Provider Status"},
+      {"command":"turbo-code-palette.cancelCsharpOperation","title":"Turbo Code Palette: Cancel Current C# Operation"},
       { "command": "turbo-code-palette.cleanCopy", "title": "Turbo Code Palette: Clean Copy", "icon": "$(copy)" },
       {"command":"turbo-code-palette.importPack","title":"Turbo Code Palette: Import Pack (.tcp-sp)"},
       {"command":"turbo-code-palette.exportPack","title":"Turbo Code Palette: Export Pack (.tcp-sp)"},
@@ -143,6 +145,11 @@
     "configuration": {
       "title": "Turbo Code Palette",
       "properties": {
+        "turboCodePalette.csharpHelperPath": {"type":"string","default":"","scope":"machine","description":"Optional trusted Tcp.CSharp.dll absolute path. Requires .NET 10; no automatic build/download. Empty keeps TCP independent of .NET. Reload Window after changing."},
+        "turboCodePalette.csharpLanguageVersion": {"type":"string","default":"","description":"Explicit C# version, e.g. 12.0. Empty uses standalone C# 14 with diagnostics; project properties are not evaluated. Reload Window after changing."},
+        "turboCodePalette.csharpDefines": {"type":"array","items":{"type":"string"},"default":[],"description":"Explicit preprocessor symbols for standalone Roslyn analysis. Reload Window after changing."},
+        "turboCodePalette.compliancePolicy": {"type":"string","enum":["none","atcoder-20261014"],"default":"none","description":"Independent of presets. AtCoder policy validates provenance assertions and preserves attribution; it does not certify eligibility or verify web publication."},
+        "turboCodePalette.atcoderContestStartsAt": {"type":"string","default":"","description":"Contest start ISO 8601 timestamp with timezone. Only compared with declared source[].publishedAt assertions; web publication is not independently verified."},
         "turboCodePalette.sourceMarkers": {"type":"boolean","default":false,"description":"Optionally annotate inserted source with UUID/version comment markers. Only supported languages and conservatively verified line contexts are annotated. Markers are comparison evidence, never proof of compatibility."},
         "turboCodePalette.globalRoot": {
           "type": "string",
@@ -167,6 +174,9 @@
     ]
   },
   "scripts": {
+    "build:csharp": "dotnet build csharp/Tcp.CSharp/Tcp.CSharp.csproj -c Release -p:RestoreLockedMode=true",
+    "test:csharp": "dotnet run --project csharp/Tcp.CSharp.Tests/Tcp.CSharp.Tests.csproj -c Release",
+    "measure:csharp": "node scripts/measure-csharp.mjs",
     "vscode:prepublish": "npm run package",
     "compile": "npm run check-types && npm run lint && node esbuild.js",
     "watch": "npm-run-all -p watch:*",

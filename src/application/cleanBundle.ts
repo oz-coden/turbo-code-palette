@@ -5,7 +5,7 @@ import { dependencyOrder } from '../core/dependency/order';
 import { exportNames, validateCollisions } from '../language/genericProvider';
 import { sourceLanguage } from '../language/sourceMarker';
 import { ConflictError } from '../core/conflict';
-import { cleanFragment, collectNotices } from '../core/clean/pipeline';
+import { cleanFragmentAsync, collectNotices } from '../core/clean/pipeline';
 import type { CleanFragment, CleanLanguageProvider, CleanPlan, CleanPreset } from '../core/clean/types';
 
 export interface ReferenceCandidate { readonly asset: AssetLocation; readonly exports: readonly string[]; readonly confirmed: false }
@@ -36,13 +36,13 @@ export async function bundleReviewPlan(library: Library, fragment: CleanFragment
 	const closure = bundleClosure(library, selected), files: ReviewFile[] = [], warnings = ['Generic Dependency Bundle is a review JSON document, not merged/executable code. Text hits are unverified; unresolved/ambiguous references are not resolved. Templates remain source data.', ...currentWarnings], transforms: string[] = [];
 	let serializedBytes = 0;
 	const addFile = (file: ReviewFile) => { serializedBytes += Buffer.byteLength(JSON.stringify(file, null, 2)) + 128; if (files.length >= 10000 || serializedBytes > 31 * 1024 * 1024) { throw new Error('Dependency Bundle file/serialized byte limit exceeded.'); } files.push(file); };
-	const current = cleanFragment(fragment, providers.get(fragment.language), preset, custom); addFile({ source: 'current-file', text: current.text, language: fragment.language }); warnings.push(...current.warnings);
+	const current = await cleanFragmentAsync(fragment, providers.get(fragment.language), preset, custom); addFile({ source: 'current-file', text: current.text, language: fragment.language }); warnings.push(...current.warnings);
 	for (const asset of closure.assets) {
 		const bytes = await library.sources(asset, asset.metadata.sources);
 		for (const source of asset.metadata.sources) {
 			const buffer = bytes.get(source)!; if (buffer.includes(0)) { throw new Error('Binary source cannot be copied as text.'); }
 			const text = new TextDecoder('utf-8', { fatal: true }).decode(buffer), language = sourceLanguage(source) || 'plaintext';
-			const result = cleanFragment({ fullText: text, start: 0, end: text.length, language }, providers.get(language), preset, custom);
+			const result = await cleanFragmentAsync({ fullText: text, start: 0, end: text.length, language }, providers.get(language), preset, custom);
 			addFile({ source, text: result.text, language, asset: { id: asset.metadata.id!, version: asset.metadata.version!.text } }); warnings.push(...result.warnings); transforms.push(...result.transforms);
 		}
 	}

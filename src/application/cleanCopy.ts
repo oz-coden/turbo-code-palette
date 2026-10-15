@@ -7,7 +7,11 @@ import { ComparisonDocuments } from '../ui/comparison';
 import { CleanProviders } from '../language/cleanProvider';
 import { relevantMarkerIdentities } from '../language/cleanMarkers';
 import { sourceLanguage } from '../language/sourceMarker';
-import { collectNotices, availableTransforms, textCleanPlan } from '../core/clean/pipeline';
+import { collectNotices, availableTransforms, textCleanPlanAsync } from '../core/clean/pipeline';
+import { attribution, assertPolicyTransforms, type CompliancePolicy } from '../core/compliance';
+import { attachAttribution } from '../language/attribution';
+import type { CSharpProvider } from '../language/csharpProvider';
+import { csharpBundleRoots, csharpBundleText } from './csharpBundle';
 import type { CleanFragment, CleanPlan, CleanPreset, CleanScope, CleanTransform } from '../core/clean/types';
 import { bundleCandidates, bundleClosure, bundleReviewPlan, type ReferenceCandidate } from './cleanBundle';
 import { loadCatalog, type AssetLocation } from '../storage/discovery';
@@ -17,6 +21,7 @@ import { ConflictError } from '../core/conflict';
 
 export type CleanOutput = 'clipboard' | 'preview' | 'save' | 'untitled';
 export interface CleanInteractions {
+	bundleMode?(): Promise<'semantic' | 'review' | undefined>;
 	preset(): Promise<CleanPreset | undefined>;
 	custom(available: readonly CleanTransform[]): Promise<readonly string[] | undefined>;
 	bundle(candidates: readonly ReferenceCandidate[], all: readonly AssetLocation[]): Promise<readonly AssetLocation[] | undefined>;
@@ -34,17 +39,19 @@ export class CleanCopy implements vscode.Disposable {
 	lastPlan?: CleanPlan;
 	private busy = false;
 	constructor(private readonly library: Library, private readonly capture: () => InsertRequest['target'], private readonly comparison: ComparisonDocuments,
-		private readonly rootGuard: () => void = () => {}, interactions?: CleanInteractions) {
+		private readonly rootGuard: () => void = () => {}, interactions?: CleanInteractions, private readonly csharp?: CSharpProvider) {
+		if (csharp?.configured) { this.providers.register('csharp', csharp.cleanProvider()); }
 		this.interactions = interactions ?? {
 			preset: async () => (await vscode.window.showQuickPick([
-				{ label: 'Readable', description: 'Proven TCP markers only; preserve all notices' },
-				{ label: 'Competitive', description: 'Same safe v1 transforms as Readable; no minification' },
+				{ label: 'Readable', description: 'Proven TCP markers only; preserve notices and attribution' },
+				{ label: 'Competitive', description: 'Roslyn whitespace normalization when available; no minification' },
 				{ label: 'Custom', description: 'Choose available provider transforms; always preserve notices' },
 			], { title: 'Clean Copy preset' }))?.label as CleanPreset | undefined,
 			custom: async available => {
 				if (!available.length) { return []; }
 				return (await vscode.window.showQuickPick(available.map(transform => ({ label: transform.label, id: transform.id, picked: true })), { title: 'Custom transforms (notices always preserved)', canPickMany: true }))?.map(item => item.id);
 			},
+			bundleMode: async () => (await vscode.window.showQuickPick([{ label: 'C# semantic single-file Bundle', value: 'semantic' as const }, { label: 'Dependency review JSON / explicit selection', value: 'review' as const }], { title: 'Dependency Bundle', placeHolder: 'Semantic failures stop; no generic code merge fallback.' }))?.value,
 			bundle: async (candidates, all) => {
 				const hits = new Map(candidates.map(candidate => [locationKey(candidate.asset), candidate.exports]));
 				const choices = all.map(asset => ({ label: asset.metadata.name!, description: `${asset.metadata.version!.text} · ${asset.root.scope} · ${asset.packName}`, detail: hits.has(locationKey(asset)) ? 'Unverified text hit: ' + hits.get(locationKey(asset))!.join(', ') : 'No proven reference. Manual selection only.', asset }));
@@ -84,24 +91,28 @@ export class CleanCopy implements vscode.Disposable {
 			if (scope === 'selection' && start === end) { throw new Error('Select text before Clean Copy Selection.'); }
 			if (Buffer.byteLength(fullText) > 16 * 1024 * 1024) { throw new Error('Clean Copy source limit exceeded.'); }
 			const fragment: CleanFragment = { fullText, start, end, language: document.languageId }, warnings: string[] = [], associated: AssetLocation[] = [];
-			const assertDocument = () => { this.rootGuard(); if (document.isClosed || document.version !== target!.version || document.getText() !== fullText || this.library.catalog.snapshot !== snapshot || JSON.stringify(this.library.roots()) !== stamp || this.providers.generation !== providerGeneration) { throw new Error('Clean Copy source/catalog/root/provider changed. Start again; no output was applied.'); } };
+			const config = vscode.workspace.getConfiguration('turboCodePalette'), policy = config.get<CompliancePolicy>('compliancePolicy', 'none');
+			const settingsStamp = (c: vscode.WorkspaceConfiguration) => JSON.stringify(['compliancePolicy', 'atcoderContestStartsAt', 'csharpHelperPath', 'csharpLanguageVersion', 'csharpDefines'].map(key => c.get(key))), policyStamp = settingsStamp(config);
+			const assertDocument = () => { this.rootGuard(); const current = vscode.workspace.getConfiguration('turboCodePalette'); if (policyStamp !== settingsStamp(current) || document.isClosed || document.version !== target!.version || document.getText() !== fullText || this.library.catalog.snapshot !== snapshot || JSON.stringify(this.library.roots()) !== stamp || this.providers.generation !== providerGeneration) { throw new Error('Clean Copy source/catalog/root/provider changed (including policy). Start again; no output was applied.'); } };
 			let physicalSource = document.uri.scheme === 'file' ? document.uri.fsPath : undefined;
 			if (physicalSource) { try { physicalSource = await fs.realpath(physicalSource); } catch { /* Unsaved file buffer has no on-disk identity yet. */ } }
 			if (physicalSource) { for (const asset of snapshot.snippets.filter(asset => !asset.root.uri)) { if (asset.files.some(file => pathCollisionKey(path.resolve(asset.root.path, asset.relativePath, file.path)) === pathCollisionKey(physicalSource!))) { associated.push(asset); } } }
 			for (const marker of relevantMarkerIdentities(fragment)) {
 				const matches = snapshot.snippets.filter(asset => asset.metadata.id === marker.id && asset.metadata.version!.text === marker.version);
-				if (!matches.length) { warnings.push('TCP marker notice metadata is unavailable in the loaded library. Existing source comments are preserved; TCP does not determine legal obligations.'); }
+				if (!matches.length) { if (policy === 'atcoder-20261014') { throw new Error('AtCoder policy cannot preserve attribution/license metadata for an unloaded TCP marker asset. Reload the source library before output.'); } warnings.push('TCP marker notice metadata is unavailable in the loaded library. Existing source comments are preserved; TCP does not determine legal obligations.'); }
 				associated.push(...matches);
 			}
 			const preset = await this.interactions.preset(); if (!preset) { return 'cancelled'; }
-			let selected: readonly AssetLocation[] = [], bundleAssets: readonly AssetLocation[] = [];
+			let selected: readonly AssetLocation[] = [], bundleAssets: readonly AssetLocation[] = [], semantic = false;
 			if (scope === 'bundle') {
-				const candidates = bundleCandidates(fullText, snapshot), eligible = snapshot.snippets.filter(asset => asset.usable && !asset.root.uri);
-				const choice = await this.interactions.bundle(candidates, eligible); if (!choice) { return 'cancelled'; } selected = choice; bundleAssets = bundleClosure(this.library, selected).assets;
+				if (document.languageId === 'csharp' && this.csharp?.configured && this.interactions.bundleMode) { const mode = await this.interactions.bundleMode(); if (!mode) { return 'cancelled'; } semantic = mode === 'semantic'; }
+				if (semantic) { selected = await csharpBundleRoots(this.library, fullText, this.csharp!); }
+				else { const candidates = bundleCandidates(fullText, snapshot), eligible = snapshot.snippets.filter(asset => asset.usable && !asset.root.uri); const choice = await this.interactions.bundle(candidates, eligible); if (!choice) { return 'cancelled'; } selected = choice; }
+				bundleAssets = bundleClosure(this.library, selected).assets;
 			}
 			assertDocument();
 			const languages = [fragment.language, ...bundleAssets.flatMap(asset => asset.metadata.sources.map(source => sourceLanguage(source) || 'plaintext'))];
-			const available = availableTransforms(this.providers.get(fragment.language)).filter(transform => languages.every(language => availableTransforms(this.providers.get(language)).some(other => other.id === transform.id)));
+			const available = availableTransforms(this.providers.get(fragment.language)).filter(transform => (scope !== 'selection' || !['normalize-whitespace', 'remove-unused-usings'].includes(transform.id)) && languages.every(language => availableTransforms(this.providers.get(language)).some(other => other.id === transform.id)));
 			const custom = preset === 'Custom' ? await this.interactions.custom(available) : [];
 			if (custom === undefined) { return 'cancelled'; } if (custom.some(id => !available.some(transform => transform.id === id))) { throw new Error('Unavailable Custom transform. No fallback was applied.'); }
 			const used = [...new Map([...associated, ...bundleAssets].map(asset => [locationKey(asset), asset])).values()];
@@ -122,9 +133,19 @@ export class CleanCopy implements vscode.Disposable {
 				}
 				assertDocument();
 			};
-			await revalidate(); const notices = collectNotices([...used, ...packs].map(asset => asset.metadata.document));
-			const plan = scope === 'bundle' ? (await bundleReviewPlan(this.library, fragment, preset, selected, this.providers, custom, notices, warnings)).plan
-				: textCleanPlan(fragment, this.providers.get(fragment.language), { scope, preset, custom, notices, warnings, extension: path.extname(document.uri.path) || '.txt' });
+			await revalidate(); const metadata = [...used, ...packs].map(asset => asset.metadata.document), notices = collectNotices(metadata);
+			const origins = attribution(used.map(asset => asset.metadata.document), policy, config.get<string>('atcoderContestStartsAt')); warnings.push(...origins.warnings);
+			if (policy !== 'none' && !associated.length && scope !== 'bundle') { warnings.push('Current file provenance is not linked to loaded assets. Source URL comments are preserved, but AI origin/prior publication/completeness cannot be determined. This is not a compliance certification.'); }
+			for (const language of languages) { assertPolicyTransforms(policy, preset === 'Custom' ? custom : this.providers.get(language).presets[preset]); }
+			let plan: CleanPlan;
+			if (semantic) {
+				const result = await csharpBundleText(this.library, fullText, selected, this.csharp!), merged = { fullText: result.text, start: 0, end: result.text.length, language: 'csharp' };
+				plan = { ...await textCleanPlanAsync(merged, this.providers.get('csharp'), { scope: 'file', preset, custom, notices, warnings: [...warnings, ...result.warnings], extension: '.cs' }), scope: 'bundle' };
+			} else { plan = scope === 'bundle' ? (await bundleReviewPlan(this.library, fragment, preset, selected, this.providers, custom, notices, warnings)).plan : await textCleanPlanAsync(fragment, this.providers.get(fragment.language), { scope, preset, custom, notices, warnings, extension: path.extname(document.uri.path) || '.txt' }); }
+			if (plan.reviewOnly) { plan = Object.freeze({ ...plan, text: JSON.stringify({ ...JSON.parse(plan.text), sourceUrls: origins.urls, compliancePolicy: policy, complianceVerified: false }, null, 2) + '\n' }); }
+			else if (origins.urls.length) { if (scope === 'selection') { throw new Error('Source attribution attachment requires a complete file. Selection output stopped.'); } plan = Object.freeze({ ...plan, text: await attachAttribution(plan.text, plan.language, [], origins.urls, this.csharp) }); }
+			else { plan = Object.freeze(plan); }
+			if (Buffer.byteLength(plan.text) > 32 * 1024 * 1024 || Buffer.from(plan.text).toString('utf8') !== plan.text) { throw new Error('Attributed Clean Copy output exceeds size/encoding limits.'); }
 			this.lastPlan = plan;
 			if (plan.warnings.length && !await this.interactions.warnings(plan)) { return 'cancelled'; }
 			let output = await this.interactions.output(plan); if (!output) { return 'cancelled'; }

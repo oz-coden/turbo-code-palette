@@ -20,10 +20,10 @@
             ...(row.dataset.index === undefined ? {} : { originalIndex: Number(row.dataset.index) }),
             id: row.dataset.id, name: row.dataset.name, version: row.querySelector('[data-constraint]').value,
         }));
-        return { fields, members: members(), dependencies, sourceName: form.querySelector('[name="sourceName"]')?.value };
+        return { fields, members: members(), dependencies, exports: document.querySelector('#exports-json') ? JSON.parse(document.querySelector('#exports-json').value) : undefined, sourceName: form.querySelector('[name="sourceName"]')?.value };
     };
     form?.addEventListener('input', () => send('dirty'));
-    form?.addEventListener('submit', event => { event.preventDefault(); const values = draft(); for (const button of form.querySelectorAll('button')) { button.disabled = true; } send('save', values); });
+    form?.addEventListener('submit', event => { event.preventDefault(); let values; try { values = draft(); } catch { feedback.textContent = 'Invalid exports JSON.'; return; } for (const button of form.querySelectorAll('button')) { button.disabled = true; } send('save', values); });
     document.addEventListener('click', event => {
         const button = event.target.closest('button[data-action]'); if (!button) { return; }
         const action = button.dataset.action;
@@ -40,6 +40,11 @@
         const message = event.data; if (!message || message.token !== token) { return; }
         if (message.type === 'closure') { document.querySelector('#closure').textContent = message.text; return; }
         if (message.type === 'error') { feedback.textContent = message.text; if (form) { for (const button of form.querySelectorAll('button')) { button.disabled = false; } } return; }
+        if (message.type === 'exports') {
+            const field = document.querySelector('#exports-json'); if (!field || !Array.isArray(message.items)) { return; }
+            try { const rows = JSON.parse(field.value); if (!Array.isArray(rows)) { throw new Error(); } for (const item of message.items) { if (!rows.some(row => row.signature === item.signature && row.kind === item.kind)) { rows.push(item); } } field.value = JSON.stringify(rows, null, 2); feedback.textContent = message.text; send('dirty'); }
+            catch { feedback.textContent = 'Repair exports JSON before detecting candidates.'; } return;
+        }
         if (message.type !== 'candidates' || !Array.isArray(message.items)) { return; }
         const dependency = message.purpose === 'dependencies';
         const container = document.querySelector(dependency ? '#dependency-candidates' : '#candidates'); container.replaceChildren();

@@ -121,6 +121,15 @@ export class MetadataDocument {
 		if (!node) { return this.applyPath(['dependencies'], [value]); }
 		return this.applyPath(['dependencies', node.children?.length ?? 0], value);
 	}
+	appendExport(value: Readonly<Record<string, string>>): MetadataDocument {
+		if (this.format !== 'current' || !value.kind?.trim() || !value.name?.trim() || Object.keys(value).some(k => !['kind', 'name', 'namespace', 'container', 'signature'].includes(k)) || Object.values(value).some(v => typeof v !== 'string')) { throw new Error('Invalid export candidate.'); }
+		const node = this.node(['exports']); if (node && node.type !== 'array') { throw new Error('Invalid exports container.'); }
+		return node ? this.applyPath(['exports', node.children?.length ?? 0], value) : this.applyPath(['exports'], [value]);
+	}
+	removeExport(index: number): MetadataDocument {
+		if (this.format !== 'current' || !Number.isSafeInteger(index) || index < 0 || !this.node(['exports', index])) { throw new Error('Invalid export index.'); }
+		return this.removeArrayEntry('exports', index);
+	}
 	removeDependency(index: number): MetadataDocument {
 		if (this.format !== 'current' || !Number.isSafeInteger(index) || index < 0 || !this.node(['dependencies', index])) { throw new Error('Invalid dependency index.'); }
 		return this.removeArrayEntry('dependencies', index);

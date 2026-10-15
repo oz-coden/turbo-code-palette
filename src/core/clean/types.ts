@@ -7,12 +7,14 @@ export interface CleanResult { readonly text: string; readonly warnings: readonl
 export interface CleanTransform {
 	readonly id: string; readonly label: string; readonly capability: string;
 	apply(text: string, original: CleanFragment): CleanResult;
+	applyAsync?(text: string, original: CleanFragment): Promise<CleanResult>;
 }
 /** Providers must implement capabilities explicitly; there is no regex fallback for missing operations. */
 export interface CleanLanguageProvider {
 	readonly id: string; readonly capabilities: ReadonlySet<string>; readonly transforms: readonly CleanTransform[];
 	readonly presets: Readonly<Record<'Readable' | 'Competitive', readonly string[]>>;
 	licenseHeader?(notices: readonly string[], fragment: CleanFragment): string | undefined;
+	attachNotices?(text: string, notices: readonly string[], fragment: CleanFragment): Promise<string>;
 }
 export interface CleanPlan {
 	readonly scope: CleanScope; readonly preset: CleanPreset; readonly text: string; readonly language: string; readonly extension: string;

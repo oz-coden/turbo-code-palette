@@ -17,7 +17,8 @@ import { pathCollisionKey, validateRelativePath } from '../storage/safePaths';
 
 export type MetadataFields = Readonly<Record<string, string | readonly string[]>>;
 export interface DependencyRow { readonly originalIndex?: number; readonly id: string; readonly name: string; readonly version?: string }
-export interface SnippetDraft { readonly fields: MetadataFields; readonly sourceName: string; readonly bytes: Buffer; readonly dependencies?: readonly DependencyRow[] }
+export interface ExportRow { readonly originalIndex?: number; readonly kind: string; readonly name: string; readonly namespace?: string; readonly container?: string; readonly signature?: string }
+export interface SnippetDraft { readonly fields: MetadataFields; readonly sourceName: string; readonly bytes: Buffer; readonly dependencies?: readonly DependencyRow[]; readonly exports?: readonly ExportRow[] }
 export interface PackDraft { readonly fields: MetadataFields; readonly members: readonly AssetLocation[] }
 export const locationKey = (asset: AssetLocation): string => JSON.stringify([asset.root.uri ?? asset.root.path, asset.relativePath]);
 export const sameRoot = (a: StorageRoot, b: StorageRoot): boolean => (a.uri ?? a.path) === (b.uri ?? b.path);
@@ -75,6 +76,19 @@ export function patchFields(document: MetadataDocument, fields: MetadataFields):
 			: node?.type === 'array' && JSON.stringify(node.children?.map(child => child.value) ?? []) === JSON.stringify(value);
 		if (!unchanged) { result = result.patchKnown([key], value); }
 	}
+	return result;
+}
+export function patchExports(document: MetadataDocument, rows?: readonly ExportRow[]): MetadataDocument {
+	if (rows === undefined) { return document; } if (!Array.isArray(rows) || rows.length > 10000) { throw new Error('Invalid exports form.'); }
+	let result = document; const used = new Set<number>(), keys = ['kind', 'name', 'namespace', 'container', 'signature'] as const;
+	for (const row of rows) {
+		if (!row || !row.kind?.trim() || !row.name?.trim() || Object.keys(row).some(k => ![...keys, 'originalIndex'].includes(k as typeof keys[number])) || keys.some(k => row[k] !== undefined && typeof row[k] !== 'string')) { throw new Error('Invalid exports form entry.'); }
+		if (row.originalIndex === undefined) { continue; } const index = row.originalIndex;
+		if (!Number.isSafeInteger(index) || index < 0 || used.has(index) || document.node(['exports', index])?.type !== 'object') { throw new Error('Invalid exports form index.'); } used.add(index);
+		for (const key of keys) { if (row[key] !== undefined && row[key] !== result.string(['exports', index, key])) { result = result.patchKnown(['exports', index, key], row[key]); } }
+	}
+	for (let i = (document.node(['exports'])?.children?.length ?? 0) - 1; i >= 0; i--) { if (!used.has(i)) { result = result.removeExport(i); } }
+	for (const row of rows.filter(r => r.originalIndex === undefined)) { result = result.appendExport(Object.fromEntries(keys.filter(k => row[k] !== undefined).map(k => [k, row[k]!]))); }
 	return result;
 }
 function newMetadata(kind: AssetKind, fields: MetadataFields, sourceName?: string): MetadataDocument {
@@ -144,7 +158,7 @@ export class Library {
 	createSnippet(root: StorageRoot, draft: SnippetDraft, newPackName?: string): Promise<string> { return this.serial(async () => {
 		if (draft.bytes.length > 16 * 1024 * 1024) { throw new Error('Source file size limit exceeded.'); }
 		validateRelativePath(draft.sourceName); if (draft.sourceName.includes('/') || ['snippet.json', 'pack.json'].includes(draft.sourceName.toLowerCase())) { throw new Error('Choose a source filename other than metadata filenames.'); }
-		decoder.decode(draft.bytes); const metadata = patchDependencies(newMetadata('snippet', draft.fields, draft.sourceName), draft.dependencies);
+		decoder.decode(draft.bytes); const metadata = patchExports(patchDependencies(newMetadata('snippet', draft.fields, draft.sourceName), draft.dependencies), draft.exports);
 		const destination = await this.destination(root, newPackName), directory = folderName(metadata.string(['name'])!) + '-' + metadata.string(['id']);
 		mergeFiles(destination.tree, new Map([['snippet.json', Buffer.from(metadata.text)], [draft.sourceName, Buffer.from(draft.bytes)]]), directory);
 		const existing = destination.pack ? this.members(destination.pack) : [];
@@ -156,9 +170,9 @@ export class Library {
 		await this.apply(root, destination.target, destination.previous, destination.tree, dependencies);
 		return metadata.string(['id'])!;
 	}); }
-	editSnippet(asset: AssetLocation, fields: MetadataFields, dependencies?: readonly DependencyRow[]): Promise<void> { return this.serial(async () => {
+	editSnippet(asset: AssetLocation, fields: MetadataFields, dependencies?: readonly DependencyRow[], exports?: readonly ExportRow[]): Promise<void> { return this.serial(async () => {
 		const pack = this.parent(asset); this.requireEditable(pack);
-		const document = patchDependencies(patchFields(asset.metadata.document, fields), dependencies); validateMetadataChange(asset.metadata.document, document, 'snippet');
+		const document = patchExports(patchDependencies(patchFields(asset.metadata.document, fields), dependencies), exports); validateMetadataChange(asset.metadata.document, document, 'snippet');
 		const previous = await this.tree(pack), next = cloneTree(previous), relative = asset.relativePath.slice(pack.relativePath.length + 1) + '/snippet.json';
 		next.set(relative, Buffer.from(document.text));
 		if (byteFingerprint(previous) === byteFingerprint(next)) { return; }
