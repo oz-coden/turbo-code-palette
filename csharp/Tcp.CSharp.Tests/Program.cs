@@ -41,6 +41,12 @@ Test("real semantic references exclude strings/comments", () => {
     var r = Run("references", "class Current { Dep value = new Dep(); string s=\"Unused\"; /*Unused*/ }", others: ["public class Dep {}", "class Unused {}"]);
     Check(r.GetProperty("documents").EnumerateArray().Select(v => v.GetString()).SequenceEqual(new[] { "dep-0.cs" }));
 });
+Test("generic construction and reduced extension references map back to export definitions", () => {
+    var result = Run("references", "class Current { Box<int> value = new Box<int>(); int M()=>1.Twice(); }", others: ["public class Box<T> {} public static class Extensions { public static int Twice(this int n)=>n*2; }"]);
+    var references = result.GetProperty("references").EnumerateArray().ToArray();
+    Check(references.Any(r => r.GetProperty("name").GetString() == "Box" && r.GetProperty("signature").GetString() == "Box<T>"));
+    Check(references.Any(r => r.GetProperty("name").GetString() == "Twice" && r.GetProperty("signature").GetString() == "Extensions.Twice(int)"));
+});
 Test("semantic Bundle converts file namespace, respects top-level and compiles", () => {
     var text = Output(Run("bundle", "System.Console.WriteLine(N.Dep.Answer);", others: ["namespace N; public class Dep { public const int Answer=42; }"]));
     Check(text.Contains("namespace N")); Check(text.IndexOf("WriteLine", StringComparison.Ordinal) < text.IndexOf("class Dep", StringComparison.Ordinal)); Run("validate", text);

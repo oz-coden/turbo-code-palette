@@ -54,7 +54,9 @@ public static class Engine {
                     if (symbol == null) continue; // Declaration names/context keywords do not necessarily bind independently.
                     foreach (var location in symbol.Locations.Where(l => l.IsInSource && l.SourceTree != trees[0])) {
                         paths.Add(location.SourceTree!.FilePath);
-                        var exported = symbol is IMethodSymbol { MethodKind: MethodKind.Constructor } constructor ? constructor.ContainingType : symbol;
+                        // Metadata candidates describe definitions, whereas references can be constructed
+                        // generic symbols or reduced extension calls with the receiver parameter removed.
+                        var exported = (symbol switch { IMethodSymbol { MethodKind: MethodKind.Constructor } constructor => constructor.ContainingType, IMethodSymbol { ReducedFrom: { } extension } => extension, _ => symbol }).OriginalDefinition;
                         referenced.Add(new { document = location.SourceTree.FilePath, name = exported.Name, @namespace = exported.ContainingNamespace?.IsGlobalNamespace == false ? exported.ContainingNamespace.ToDisplayString() : "", container = exported.ContainingType?.ToDisplayString(Display) ?? "", signature = exported.ToDisplayString(Display) });
                     }
                 }

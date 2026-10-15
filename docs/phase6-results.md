@@ -79,27 +79,27 @@ Policy中にmarkerの元metadataが未ロードなら停止する。markerもmet
 
 ## Performance / runtime方式
 
-Windows x64 / SDK 10.0.102 / runtime 10.0.2、Release、単一ローカル測定。startupは初回Roslyn解析・JIT込み。request loopの中央値であり製品SLAではない。計測scriptはscripts/measure-csharp.mjs、raw測定・生成project・publish出力はGit除外領域のみ。
+Windows x64 / SDK 10.0.102 / runtime 10.0.2、Release、同一端末で2回測定。startupは初回Roslyn解析・JIT込み。request loopの中央値であり製品SLAではない。初回と最終補修後で小さい差があり、OS cacheや負荷を統制した比較ではない。計測scriptはscripts/measure-csharp.mjs、raw測定・生成project・publish出力はGit除外領域のみ。
 
 | 項目 | 測定 |
 |---|---:|
-| framework-dependent cold Snippet | 約463 ms |
-| warm Snippet (20 requests) | 中央値1.37 ms |
-| current file 500 types (5 requests) | 中央値56.1 ms |
-| semantic references (5 requests) | 中央値2.78 ms |
-| two-source Bundle + Emit (5 requests) | 中央値10.4 ms |
-| working set（測定系列） | 約138–182 MB |
+| framework-dependent cold Snippet | 約463–469 ms |
+| warm Snippet (各20 requests) | 中央値1.37–1.40 ms |
+| current file 500 types (各5 requests) | 中央値56.1–59.4 ms |
+| semantic references (各5 requests) | 中央値2.78–2.89 ms |
+| two-source Bundle + Emit (各5 requests) | 中央値10.0–10.4 ms |
+| working set（測定系列） | 約138–183 MB |
 | managed memory | 約10–28 MB |
 | framework-dependent publish | 16,826,489 bytes / 33 files |
 | self-contained win-x64 publish | 97,376,869 bytes / 220 files |
-| self-contained cold analysis（1回） | 約958 ms |
-| 本体production JS（測定時） | 約225 KB |
+| self-contained cold analysis（2回） | 約506–958 ms |
+| 本体production JS（最終測定時） | 約226 KB |
 
 framework-dependentは小さいが.NET 10が必要。self-containedはruntime不要にできる代わりにOS/architecture別artifactと約6倍の容量が必要。測定のstartup差だけで優劣は確定しない。現clientはconfigured DLL + installed runtimeで、self-contained apphostの配布/検証/更新UXは今回確定していない。helperをrequestごとに起動せず、idle shutdownで資源を解放する。
 
 ## Tests / security / remaining limits
 
-- Roslyn console unit suite: 26件。block/file namespace、top-level、nested/generic、overload/extension/property/field/const、raw/interpolated/verbatim strings、directives、comments/XML、parse error、collision/ambiguous/partial、marker部分/nested/不正、reference/Bundle、license/header/using、caller-info拒否を含む。
+- Roslyn console unit suite: 27件。block/file namespace、top-level、nested/generic、overload/extension/property/field/const、raw/interpolated/verbatim strings、directives、comments/XML、parse error、collision/ambiguous/partial、marker部分/nested/不正、generic construction/reduced extensionのexport対応、reference/Bundle、license/header/using、caller-info拒否を含む。
 - TypeScript unit/security suite: 132件。protocol lifecycle/timeout/cancel/crash/malformed/limits、Policy拒否/URL/公開申告、exports losslessness、既存storage/archive/Undo planningの回帰を含む。
 - 実Extension Host: 最低1.134.0と比較用1.140.0の隔離版で各74件通過。C# Insert + single Undo、衝突の非apply、async Clean Copy preview、semantic Bundle入口、AtCoder不足時非変更、helper lifecycle/degradation、.NETなし既定activationを含む。標準install版はupdater lockで起動できず、更新処理には触れず同version系の隔離archiveを使用した。途中にUndo focusタイミングの失敗があったが、最終の全件連続runは通過。
 - representative generated Bundle: helper Emitに加えdotnet build/実行を通し期待値42を確認。元project/sourceはbuildしない。
