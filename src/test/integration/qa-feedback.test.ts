@@ -17,6 +17,11 @@ const id = (n: number) => '73000000-0000-4000-8000-' + String(n).padStart(12, '0
 const capture = (editor: vscode.TextEditor) => ({ uri: editor.document.uri, version: editor.document.version, selection: editor.selection });
 const io = (): InsertionInteractions => ({ input: async (_, variable) => variable.defaultValue ?? '1', mode: async (_, available) => available[0], preview: async () => true, output: async () => undefined, warnings: async () => true });
 const dll = path.resolve(__dirname, '../../..', 'csharp/Tcp.CSharp/bin/Release/net10.0/Tcp.CSharp.dll');
+async function waitFor(check: () => boolean, reason: string): Promise<void> {
+	const limit = Date.now() + 5000;
+	while (!check() && Date.now() < limit) { await new Promise(resolve => setTimeout(resolve, 25)); }
+	assert.ok(check(), reason);
+}
 
 suite('Manual QA feedback — public UI integration and insertion receipt regressions', () => {
 	let api: Phase0Api, folder: string, previous: string | undefined;
@@ -37,11 +42,12 @@ suite('Manual QA feedback — public UI integration and insertion receipt regres
 		vscode.window.createQuickPick = (() => { pick = create<SearchPickerItem>(); return pick; }) as typeof create;
 		try {
 			await vscode.commands.executeCommand('turbo-code-palette.searchCatalog'); assert.ok(pick);
-			pick.value = 'Greeting'; await new Promise(resolve => setTimeout(resolve, 150));
+			pick.value = 'Greeting';
+			await waitFor(() => pick!.items[0]?.query === 'Greeting' && pick!.activeItems.some(item => item.action === 'apply'), 'native input change reaches the TCP query model and active Apply');
 			assert.equal(pick.items[0].label, 'Apply filter (2 items)'); assert.equal(pick.items[0].alwaysShow, true);
 			assert.ok(pick.activeItems.some(item => item.action === 'apply'), 'Apply remains an active visible native item despite nonmatching label');
 			pick.activeItems = [pick.items[0]]; await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
-			await new Promise(resolve => setTimeout(resolve, 100));
+			await waitFor(() => api.product.snippets.query === 'Greeting', 'native Apply acceptance updates the sidebar filter');
 			assert.equal(api.product.snippets.query, 'Greeting'); assert.equal(api.product.snippets.getChildren().length, 2);
 		} finally { vscode.window.createQuickPick = create; pick?.hide(); api.product.snippets.query = ''; api.product.refresh(); }
 	});

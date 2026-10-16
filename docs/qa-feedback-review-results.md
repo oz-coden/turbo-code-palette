@@ -177,6 +177,7 @@ SHA-256：`4dd253ab33a0eadd2a779987e1d0967041daa725ad39a60c7c17d5be6045c19a`。
 
 新規unitは`src/test/unit/qa-feedback.test.ts`の10件とproduction webviewの1件、Hostは`src/test/integration/qa-feedback.test.ts`の10件、Roslynは3件です。
 途中の失敗（native fuzzy選択、C# EOF境界等）は修正し、上の最終試験で再確認しました。
+CIのmacOS最低対応版では、検索試験が固定150ms後にまだ入力反映前の9件を読んで失敗しました。試験はquery / active Apply / sidebar適用の条件を上限付きで待つ形に修正し、assertionを省略せず再検証します。製品codeやpackage内容はこの試験同期修正で変更しません。
 最初の制限付き環境で既存link testが権限不足になった実行は合格に含めず、権限を得た再実行で全件確認しました。
 このMarkdown確認は軽量checkerであり、full Markdownlint / 日本語校閲 / GUI確認そのものではありません。
 
