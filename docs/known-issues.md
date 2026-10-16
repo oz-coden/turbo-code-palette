@@ -11,6 +11,17 @@
   editor Undo; multi-Pack rollback is not implemented. Existing files never overwrite.
 - Generic structural/semantic inference is intentionally narrow. Generic Bundle is
   review JSON. Generic Clean Copy preserves ordinary comments and whitespace.
+- Repeated roots, including templates, currently share the dependency duplicate
+  policy. Repeatable-fragment semantics need an explicit product decision.
+- C# structural dependency batches currently require common explicit targets;
+  per-asset member/namespace/using placement is not implemented. Missing targets
+  are refused. End-of-line trivia follows the target; literal token data is kept.
+- Optional Insert marker generation remains narrower than Roslyn Clean removal.
+  Quotes/operators/uncertain contexts can omit markers with a warning. Proven
+  JS/TS/Python line comments no longer taint following plain-marker context.
+- Source management offers normal-editor Open and an existing-relative-path form;
+  per-source Reveal/Add/Remove file buttons are not implemented. Removing a source
+  reference does not delete its physical file.
 - Standalone C# analysis is not a workspace project model. Missing references, unsafe
   directives, caller-info-sensitive rewrites, ambiguity or parse failures can block
   semantic operations. No workspace build/generator execution occurs.

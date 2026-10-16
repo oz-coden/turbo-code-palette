@@ -85,7 +85,10 @@ export function patchExports(document: MetadataDocument, rows?: readonly ExportR
 		if (!row || !row.kind?.trim() || !row.name?.trim() || Object.keys(row).some(k => ![...keys, 'originalIndex'].includes(k as typeof keys[number])) || keys.some(k => row[k] !== undefined && typeof row[k] !== 'string')) { throw new Error('Invalid exports form entry.'); }
 		if (row.originalIndex === undefined) { continue; } const index = row.originalIndex;
 		if (!Number.isSafeInteger(index) || index < 0 || used.has(index) || document.node(['exports', index])?.type !== 'object') { throw new Error('Invalid exports form index.'); } used.add(index);
-		for (const key of keys) { if (row[key] !== undefined && row[key] !== result.string(['exports', index, key])) { result = result.patchKnown(['exports', index, key], row[key]); } }
+		for (const key of keys) {
+			if ((key === 'namespace' || key === 'container' || key === 'signature') && row[key] === undefined) { if (result.node(['exports', index, key])) { result = result.removeExportQualifier(index, key); } }
+			else if (row[key] !== undefined && row[key] !== result.string(['exports', index, key])) { result = result.patchKnown(['exports', index, key], row[key]); }
+		}
 	}
 	for (let i = (document.node(['exports'])?.children?.length ?? 0) - 1; i >= 0; i--) { if (!used.has(i)) { result = result.removeExport(i); } }
 	for (const row of rows.filter(r => r.originalIndex === undefined)) { result = result.appendExport(Object.fromEntries(keys.filter(k => row[k] !== undefined).map(k => [k, row[k]!]))); }

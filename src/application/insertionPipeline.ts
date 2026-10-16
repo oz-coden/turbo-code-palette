@@ -10,6 +10,7 @@ import type { AssetVersion } from '../core/version/parser';
 import { templateInputs, substitute, validateValue, type Variable } from '../core/template/substitution';
 import { modePolicy, type InsertMode } from '../core/insertion/modes';
 import { applyText, planText, type OffsetEdit } from '../core/insertion/textPlan';
+import { changedRange, receiptSurvives, type TextTransition } from '../core/insertion/receiptTracking';
 import { exportNames, supportsStructure, validateCollisions } from '../language/genericProvider';
 import { assertNoLinks, containedPath, pathCollisionKey } from '../storage/safePaths';
 import { applyFiles, validateDestination, type FileOutput } from './fileInsertion';
@@ -175,13 +176,13 @@ export class InsertionPipeline implements vscode.Disposable {
 				const selection = request.target!.selection;
 				if (semantic && items.some(item => item.mode === 'structure-aware')) {
 					if (items.some(item => item.mode !== 'structure-aware')) { throw new Error('Structural and offset modes cannot be mixed in one semantic plan. Select compatible modes for the closure.'); }
-					let planned = before;
 					// Dependency order is retained at a common boundary by planning the batch as one fragment.
 					const targets = items.map(item => (item.asset.metadata.document.node(['insert', 'targets'])?.children ?? []).map(node => node.value as string));
 					const common = targets[0].filter(target => targets.every(list => list.includes(target)));
-					const placed = await semantic.place(planned, items.flatMap(item => item.sources).join('\n'), document.offsetAt(selection.active), common); warnings.push(...placed.diagnostics);
+					if (!common.length) { throw new Error('C# structure-aware requires a shared explicit insert.targets for this dependency batch. Per-Snippet structural targets are not yet supported. Select compatible modes or adjust the Pack explicitly; no changes were applied.'); }
+					const placed = await semantic.place(before, items.flatMap(item => item.sources).join('\n'), document.offsetAt(selection.active), common, document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n'); warnings.push(...placed.diagnostics);
 					if (placed.result.offset > before.length) { throw new Error('Invalid C# placement response.'); }
-					planned = planned.slice(0, placed.result.offset) + placed.result.text + planned.slice(placed.result.offset); edits = [{ start: 0, end: before.length, text: planned }];
+					edits = [{ start: placed.result.offset, end: placed.result.offset, text: placed.result.text }];
 				} else { edits = planText(before, { start: document.offsetAt(selection.start), end: document.offsetAt(selection.end), active: document.offsetAt(selection.active) }, items, document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n'); }
 			}
 			// Reused dependencies still need their actual revision's citations/notices.
@@ -205,9 +206,12 @@ export class InsertionPipeline implements vscode.Disposable {
 			await this.assets(attributionAssets);
 			const origins = collectAttribution(attributionAssets.map(asset => asset.metadata.document), [...attributionAssets, ...originPacks].map(asset => asset.metadata.document).concat(historicalPackNotices), resolved.options.attribution, policy, config.get<string>('atcoderContestStartsAt')); warnings.push(...origins.warnings);
 			let after = applyText(before, edits);
+			const transitions: TextTransition[] = [{ before, after, edits }];
 			if (output) { const files = new Map<string, string>(); for (const [name, source] of output.files) { files.set(name, await attachAttribution(source, sourceLanguage(name), origins.notices, origins.urls, semantic, origins.details)); } output = { ...output, files }; }
 			else {
-				after = await attachAttribution(after, document.languageId, origins.notices, origins.urls, semantic, origins.details); if (after !== applyText(before, edits)) { edits = [{ start: 0, end: before.length, text: after }]; }
+				const unannotated = after;
+				after = await attachAttribution(after, document.languageId, origins.notices, origins.urls, semantic, origins.details);
+				if (after !== unannotated) { transitions.push({ before: unannotated, after, edits: changedRange(unannotated, after) }); edits = [{ start: 0, end: before.length, text: after }]; }
 				if (semantic) { try { warnings.push(...await semantic.validate(after)); } catch (error) { throw new ConflictError('Language syntax/binding/collision validation stopped the plan: ' + (error as Error).message, { currentText: before, requestedText: after }); } }
 			}
 			if (after.length > 32 * 1024 * 1024) { throw new Error('Planned text limit exceeded.'); }
@@ -232,8 +236,7 @@ export class InsertionPipeline implements vscode.Disposable {
 				if (!ok) { throw new Error('Atomic text edit was rejected. No insertion was applied.'); }
 				const implementations = new Map(verified?.implementations ?? []), ambiguous = new Set(verified ? verified.ambiguous : history.flatMap(receipt => [...receipt.implementations.keys(), ...receipt.ambiguous]));
 				for (const [id, receipt] of implementations) {
-					const start = before.indexOf(receipt.body), end = start + receipt.body.length;
-					if (start < 0 || before.indexOf(receipt.body, start + 1) >= 0 || edits.some(edit => edit.start < end && edit.end > start || edit.start === edit.end && edit.start > start && edit.start < end)) { implementations.delete(id); ambiguous.add(id); }
+					if (!receiptSurvives(before, after, receipt.body, transitions)) { implementations.delete(id); ambiguous.add(id); }
 				}
 				const eol = document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n';
 				for (const item of items) { const body = item.sources.map(source => source.replace(/\r\n|\r|\n/g, eol)).join(eol); if (after.indexOf(body) >= 0 && after.indexOf(body, after.indexOf(body) + 1) < 0) { implementations.set(item.asset.metadata.id!, { signature: signature(item.asset), version: item.asset.metadata.version!, body, asset: item.asset, packMetadata: snapshot.packs.find(pack => sameRoot(pack.root, item.asset.root) && pack.relativePath === packOf(item.asset))!.metadata.document }); ambiguous.delete(item.asset.metadata.id!); } else { ambiguous.add(item.asset.metadata.id!); } }

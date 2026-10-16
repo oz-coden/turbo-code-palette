@@ -2,6 +2,7 @@
 
 対象：開発版0.0.1、2026-10-16。製品機能・version・licenseの変更はありません。
 Marketplace公開・GitHub Release作成も行っていません。
+このページは`777425c`時点の準備作業の記録です。後続の[手動QAフィードバック対応](../qa-feedback-review-results.md)と、そこに記録する修正版VSIXとは区別してください。
 
 ## 作成した資料とデータ
 

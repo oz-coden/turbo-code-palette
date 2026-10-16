@@ -9,6 +9,14 @@ interface Pair { readonly begin: Marker; readonly end: Marker }
 const commentPrefixes: Readonly<Record<string, string>> = { csharp: '//', c: '//', cpp: '//', java: '//', javascript: '//', javascriptreact: '//', typescript: '//', typescriptreact: '//', go: '//', rust: '//', python: '#' };
 export function cleanCommentPrefix(language: string): string | undefined { return commentPrefixes[language]; }
 
+/** Only a comment starting in an already proven context. This never recovers from
+ * an uncertain string/block/markup context, and never interprets C/Java escapes. */
+function independentOrdinaryComment(line: string, language: string, prefix: string): boolean {
+	if (!['javascript', 'typescript', 'javascriptreact', 'typescriptreact', 'python'].includes(language)) { return false; }
+	if (!line.trimStart().startsWith(prefix) || /[\u0085\u2028\u2029\\]/.test(line) || line.includes('??/')) { return false; }
+	return language !== 'python' || !/^\s*#(?:!|.*coding[:=])/.test(line);
+}
+
 function parseLine(line: string, prefix: string): (MarkerIdentity & { kind: Marker['kind'] }) | undefined {
 	if (line.length > 4096) { return; }
 	const kind = line.startsWith(prefix + ' TCP BEGIN ') ? 'BEGIN' : line.startsWith(prefix + ' TCP END ') ? 'END' : undefined;
@@ -38,10 +46,14 @@ function scan(fragment: CleanFragment): { pairs: Pair[]; markers: Marker[]; prov
 			else if (open) { if (!nested && open.id === marker.id && open.version === marker.version) { pairs.push({ begin: open, end: marker }); } open = undefined; nested = false; }
 		}
 		// Ordinary comments may carry pragmas/directives. Do not reason through them without a real lexer.
-		if (/[\u0085\u2028\u2029\\]/.test(line) || line.includes('??/') || !parsed && /["'`/#<>]/.test(line)) { safe = false; }
+		if (/[\u0085\u2028\u2029\\]/.test(line) || line.includes('??/') || !parsed && !independentOrdinaryComment(line, fragment.language, prefix) && /["'`/#<>]/.test(line)) { safe = false; }
 		offset = end + (fragment.fullText[end] === '\r' && fragment.fullText[end + 1] === '\n' ? 2 : 1);
 	}
 	return { pairs, markers, provenEnd: safe };
+}
+
+export function provenCommentBoundary(text: string, language: string): boolean {
+	return scan({ fullText: text, start: 0, end: text.length, language }).provenEnd;
 }
 
 export function relevantMarkerIdentities(fragment: CleanFragment): MarkerIdentity[] {

@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import type { Stats } from 'node:fs';
 
 export interface CSharpDocument { readonly id: string; readonly source: string }
 export interface CSharpOptions { readonly languageVersion?: string; readonly defines?: readonly string[] }
@@ -39,13 +40,15 @@ export class CSharpClient {
 	private idle?: ReturnType<typeof setTimeout>;
 	private starting = false;
 	private disposed = false;
+	private generation = 0;
 	status = 'C# semantic provider unavailable: helper not configured.';
 	lastMetrics?: { elapsedMs: number; workingSetBytes: number; managedBytes: number };
-	constructor(readonly settings: HelperSettings) {}
+	constructor(readonly settings: HelperSettings, private readonly inspect: (filename: string) => Promise<Stats> = filename => fs.lstat(filename)) {}
 	get configured(): boolean { return !!this.settings.dll; }
 	get running(): boolean { return !!this.process; }
-	cancel(): void { if (this.pending) { this.process?.stdin.write(JSON.stringify({ protocolVersion: 1, id: this.pending.id, operation: 'cancel' }) + '\n'); this.stop('cancelled'); } }
+	cancel(): void { if (this.pending || this.starting) { if (this.pending) { this.process?.stdin.write(JSON.stringify({ protocolVersion: 1, id: this.pending.id, operation: 'cancel' }) + '\n'); } this.stop('cancelled'); } }
 	private stop(reason: string): void {
+		++this.generation;
 		this.status = 'C# semantic provider unavailable: ' + reason;
 		if (this.idle) { clearTimeout(this.idle); this.idle = undefined; }
 		const process = this.process; this.process = undefined; this.buffer = Buffer.alloc(0);
@@ -58,11 +61,13 @@ export class CSharpClient {
 		if (signal?.aborted) { throw new Error('C# request cancelled.'); }
 		const id = randomUUID(), line = JSON.stringify({ protocolVersion: 1, id, operation, input: { ...extra, documents, options: this.settings.options ?? {} } }) + '\n';
 		if (Buffer.byteLength(line) > 8 * 1024 * 1024) { throw new Error('C# helper request size limit exceeded.'); }
-		this.starting = true;
+		this.starting = true; const generation = this.generation;
 		try {
 			if (!this.process) {
 				if (!path.isAbsolute(this.settings.dll) || path.extname(this.settings.dll).toLowerCase() !== '.dll') { throw new Error('Configure an absolute trusted helper DLL path (machine setting).'); }
-				const stat = await fs.lstat(this.settings.dll); if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) { throw new Error('Helper DLL must be a regular unlinked file.'); }
+				const stat = await this.inspect(this.settings.dll); if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) { throw new Error('Helper DLL must be a regular unlinked file.'); }
+				if (this.disposed) { throw new Error('Helper disposed during startup.'); }
+				if (signal?.aborted || generation !== this.generation) { throw new Error('Request cancelled during startup.'); }
 				const env: NodeJS.ProcessEnv = {}; for (const key of ['PATH', 'Path', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP', 'HOME', 'DOTNET_ROOT', 'DOTNET_ROOT_X64']) { if (process.env[key]) { env[key] = process.env[key]; } }
 				const child = spawn('dotnet', [this.settings.dll], { shell: false, windowsHide: true, cwd: path.dirname(this.settings.dll), env }); this.process = child;
 				child.stdout.on('data', (chunk: Buffer) => {

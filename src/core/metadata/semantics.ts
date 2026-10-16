@@ -75,6 +75,7 @@ export function readMetadata(document: MetadataDocument, kind: AssetKind): Metad
 			try {
 				if (node.type !== 'object' || !depId || !UUID.test(depId) || !depName?.trim()
 					|| (constraintNode && constraintNode.type !== 'string')) { throw new Error('Invalid dependency.'); }
+				if (depId.toLowerCase() === id?.toLowerCase()) { issue('dependencies', 'self-dependency'); return; }
 				const constraint = parseConstraint(document.string(['dependencies', index, 'version']));
 				if (constraint.empty) { issue('dependencies', 'empty-version-range'); }
 				dependencies.push({ id: depId.toLowerCase(), name: depName, constraint });

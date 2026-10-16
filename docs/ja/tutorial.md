@@ -45,8 +45,9 @@ sourceは元projectの参照ではなくlibrary内のcopyです。
 ## 4. 名前・タグで検索する（2分）
 
 Snippets見出しの虫眼鏡、または**Turbo Code Palette: Search Snippets**を実行します。
-`Tutorial`と入力し、先頭の**Apply filter (1 items)**を選びEnterします。
+`Tutorial`と入力し、**Apply filter (1 items)**行を選びEnterします。修正版では文字を入力してもApply行は消えません。
 同じ操作で`tag:tutorial lang:javascript`も試します。
+条件候補の選択後も他の種類を追加でき、最後にApply filterで確定します。解除はClear searchです。
 
 **確認結果**：Tutorial Greetingが見つかります。query候補を選んだだけでは確定せず、Apply filterが必要です。
 検索を解除するときは入力を空にしてApply filterします。

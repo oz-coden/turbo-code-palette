@@ -97,6 +97,12 @@ public static class Engine {
     static object Place(JsonElement input, string before, CompilationUnitSyntax root, CSharpParseOptions options, CancellationToken token) {
         var cursor = input.GetProperty("offset").GetInt32(); if (cursor < 0 || cursor > before.Length) throw new InvalidOperationException("Invalid target offset.");
         var source = Text(input, "source"); var targets = Strings(input, "targets");
+        var requestedEol = Text(input, "eol");
+        if (requestedEol.Length > 0 && requestedEol is not "\n" and not "\r\n") throw new InvalidOperationException("Unsupported placement line ending.");
+        var eol = requestedEol.Length > 0 ? requestedEol : before.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        // Normalize syntax trivia only. Newlines inside literal tokens remain data.
+        var incoming = CSharpSyntaxTree.ParseText(source, options, cancellationToken: token).GetRoot(token);
+        source = incoming.ReplaceTrivia(incoming.DescendantTrivia().Where(t => t.IsKind(SyntaxKind.EndOfLineTrivia)), (_, _) => SyntaxFactory.EndOfLine(eol)).ToFullString();
         if (targets.Length == 0) throw new InvalidOperationException("C# structure-aware requires explicit insert.targets.");
         // Classify a fragment by parsing in the exact syntactic context of each allowed target.
         var candidates = new List<(int Offset, string Context)>();
@@ -107,7 +113,10 @@ public static class Engine {
         if (Allowed("file", "top-level")) { candidates.Add((root.Members.LastOrDefault(m => m is GlobalStatementSyntax)?.FullSpan.End ?? root.Members.FirstOrDefault()?.FullSpan.Start ?? before.Length, "top-level")); candidates.Add((before.Length, "top-level")); }
         if (Allowed("namespace")) {
             foreach (var ns in root.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>()) {
-                if (ns.FullSpan.Contains(cursor) || cursor == ns.FullSpan.End) candidates.Add((ns is NamespaceDeclarationSyntax b ? b.CloseBraceToken.SpanStart : ns.FullSpan.End, ns is FileScopedNamespaceDeclarationSyntax ? "file-scoped namespace" : "namespace"));
+                // A file-scoped namespace extends through EOF trivia, which Roslyn
+                // can attach to the compilation unit rather than this node's span.
+                if (ns.FullSpan.Contains(cursor) || cursor == ns.FullSpan.End || ns is FileScopedNamespaceDeclarationSyntax file && cursor >= file.SemicolonToken.Span.End)
+                    candidates.Add((ns is NamespaceDeclarationSyntax b ? b.CloseBraceToken.SpanStart : before.Length, ns is FileScopedNamespaceDeclarationSyntax ? "file-scoped namespace" : "namespace"));
             }
             if (!root.Members.OfType<BaseNamespaceDeclarationSyntax>().Any()) candidates.Add((before.Length, "namespace"));
         }
@@ -117,7 +126,7 @@ public static class Engine {
             var next = block.Statements.FirstOrDefault(s => s.FullSpan.Start >= cursor);
             candidates.Add((next?.FullSpan.Start ?? block.CloseBraceToken.SpanStart, "method/statement"));
         }
-        var valid = candidates.Distinct().Select(c => (c.Offset, c.Context, Text: "\n" + source + "\n")).Where(c => {
+        var valid = candidates.Distinct().Select(c => (c.Offset, c.Context, Text: eol + source + eol)).Where(c => {
             var after = before.Insert(c.Offset, c.Text); return !CSharpSyntaxTree.ParseText(after, options, cancellationToken: token).GetDiagnostics(token).Any(d => d.Severity == DiagnosticSeverity.Error);
         }).OrderBy(c => Math.Abs(c.Offset - cursor)).ThenBy(c => c.Offset).ToArray();
         if (valid.Length == 0) throw new InvalidOperationException("No proven legal insertion target. Choose an explicit mode or repair syntax; no fallback.");

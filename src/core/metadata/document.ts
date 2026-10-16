@@ -161,6 +161,10 @@ export class MetadataDocument {
 		if (this.format !== 'current' || !Number.isSafeInteger(index) || index < 0 || this.node(['dependencies', index])?.type !== 'object') { throw new Error('Invalid dependency index.'); }
 		return this.applyPath(['dependencies', index, 'version'], undefined);
 	}
+	removeExportQualifier(index: number, key: 'namespace' | 'container' | 'signature'): MetadataDocument {
+		if (this.format !== 'current' || !Number.isSafeInteger(index) || index < 0 || this.node(['exports', index])?.type !== 'object' || !['namespace', 'container', 'signature'].includes(key)) { throw new Error('Invalid export qualifier.'); }
+		return this.applyPath(['exports', index, key], undefined);
+	}
 	private applyPath(path: readonly (string | number)[], value: unknown): MetadataDocument {
 		// Formatting the insertion's enclosing range would rewrite untouched subtrees.
 		// Offset edits without formatting retain their exact original tokens and spacing.

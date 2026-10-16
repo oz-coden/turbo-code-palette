@@ -5,6 +5,31 @@
 [開始ガイド](README.md)で隔離runを準備し、生成された`reports/checklist.md`へ結果を記録してください。
 この原本を個人path入りの実行記録で上書きしないでください。
 
+## フィードバック後の再試験前に
+
+以前の0.0.1 VSIXと今回の修正版はversion表示が同じです。VSIXを再インストールし、QAウィンドウを再起動してから試します。hash / commitを記録してください。
+以前のrunや、その`reports/checklist.md`を自動更新することはありません。元の結果は残し、今回の原本または新runで再試験します。
+
+1. [開始ガイド](README.md)の準備スクリプトをrepositoryルートで実行すると、新runにtutorial / labができます。
+2. tutorialは自分で作る練習用です。**Q04以降の合成fixtureを使う試験はlab**で行います。
+3. 開始ガイドの`$qa`をそのrunへ設定し、次でlabを開きます。
+
+```powershell
+code --new-window --user-data-dir "$qa/lab-profile" --extensions-dir "$qa/extensions" "$qa/lab"
+```
+
+4. SettingsのGlobal Rootが`global-lab`、Explorerに`lab/.snippets/QA-Web/pack.json`、Packsに**QA Web Components**があることを確認します。
+5. Snippetsで**Clear search**、Filterで**All**を選びます。初期labは2 Pack / 9 Snippetです。
+6. **QA Answer**は合成JS Snippetで、`answer.js`の`qaAnswer()`が**QA Double**の`qaDouble(21)`を呼びます。
+   どちらもQA-Web内にあります。TemplateはQA Named Template、複数fileはQA Two Filesです。
+7. fixtureが見えない場合は、最初にworkspace / profile / query / Allを確認し、Reload Libraryします。tutorial内にQA Answerを探さないでください。
+   既に変更・削除したfixtureを復旧する必要があれば、個人libraryへ上書きせず新runを作ります。
+
+各Qの前提に「lab」とある場合はこの状態から始めます。target fileは必ずproject側の`targets/insert.*`を選び、library sourceへの誤Insertを避けます。
+Quick Pickの**Enterはその行を選ぶ操作**、複数選択pickerのSpaceはcheck切替です。
+**Escは現在focusしているpicker / dialogを中止する操作**です。editor tabのCloseと同じ意味ではありません。
+エラーが出たら結果と直前操作を記録し、Save / revertが必要なeditor、Reload pending、query / Filter、実language modeを順に確認します。
+
 ## 実行記録・判定方法
 
 ```text
@@ -71,9 +96,11 @@ C# Provider Status / .NET runtime / Workspace Trust：
 
 **前提**：labのQA Answer / QA Doubleが初期状態。
 
-**操作**：Create Pack → Workspace、Name `QA Selected`。Search SnippetsでQA Answerを検索 → Search / add → Add → Preview dependency closure → Save。Pack詳細の一覧確認。Edit MetadataでQA DoubleをRemoveしPreview / Saveを試す。
+**操作**：上の手順でlabを開く。Command Palette **Turbo Code Palette: Create Pack** → Workspace、Name `QA Selected`。form内Search Snippetsへ`QA Answer` → Search / add → 表示候補のAdd → Preview dependency closure → Save。Pack詳細の一覧確認。Edit metadataで開き直し、QA DoubleをRemoveしPreview / Saveを試す。
 
 **期待**：QA Doubleが依存として含まれる。必要な依存を壊す削除は拒否し、保存済みPackが不完全にならない。Cancelで復帰できる。
+初回Previewのclosureは2 Snippet（QA AnswerとQA Double）、Auto-addedにQA Doubleです。Save後のPack詳細には両方が出ます。
+候補なしならLabの切替・Clear search / All・名前を確認します。Removeの拒否は期待結果で、元のPackを壊してから復旧する試験ではありません。
 
 記録：結果［未実施］／clicks［ ］／keys［ ］／時間［ ］／発見［ ］／直感性［ ］／復帰［ ］／問題・報告ID［ ］
 
@@ -81,9 +108,10 @@ C# Provider Status / .NET runtime / Workspace Trust：
 
 **前提**：lab。全件表示から開始。
 
-**操作**：Search Snippetsで`tag:qa lang:python` → Apply filter。空queryで解除。`bad:value`のerrorを確認しEsc。QA GreetingをFavoriteし、All / Favorites / Recentを切り替える。詳細表示後Recentも確認。Search Packsも実行する。
+**操作**：Search Snippetsの入力へ`Greeting` → Apply filter行を選びEnter（2件）。Clear searchで解除。`lang:py` → `lang:"python"`候補を選びEnter。続けて`tag:"qa"`を選ぶか入力へ`tag:qa`を追記し、最後にApply filterを選びEnter（1件）。`bad:value`ではCannot apply filterを確認し、検索pickerにfocusしたままEsc。QA GreetingをFavoriteし、All / Favorites / Recentを切り替える。Search Packsも実行する。
 
 **期待**：queryどおり絞り込み、不正queryを全件扱いしない。FavoriteだけがFavoritesに出る。詳細を開いたものもRecentに出る。検索とFilterの両方を解除すると全件に戻る。
+条件候補を選んだだけではsidebarに適用されません。Apply / Clear行は通常入力で消えません。以前のVSIXで行が消える場合は再インストール・再起動を確認します。
 
 記録：結果［未実施］／clicks［ ］／keys［ ］／時間［ ］／発見［ ］／直感性［ ］／復帰［ ］／問題・報告ID［ ］
 
@@ -91,7 +119,8 @@ C# Provider Status / .NET runtime / Workspace Trust：
 
 **前提**：lab。`targets/insert.js`の空行。QA Greeting、標準設定。各試行後にUndoして同じ前提へ戻す。
 
-**操作**：①行inline矢印 ②右クリックInsert → Default Mode ③Command Palette **Turbo Code Palette: Insert Snippet**で選択 ④QA Web ComponentsのPack詳細内Insert。毎回target editorへ戻してUndo一回。
+**操作**：各回、まず`targets/insert.js`の空行を左クリック。①Snippet行へhoverして出る矢印を**左クリック** ②**Snippet名の行**を右クリック → Insert submenu → 通常Insert（Turbo Code Palette: Insert Snippet / Default Modeと表示される入口）③Command Palette **Turbo Code Palette: Insert Snippet**でQA Greetingを選択 ④QA Web ComponentsのPack詳細内、QA Greeting横のInsertを左クリック。毎回target editorへ戻してUndo一回。
+矢印自体を右クリックする操作ではありません。②には別にmode選択とOptionsの入口があります。このQでは通常Insertを選び、各modeはQ15で試します。
 
 **期待**：4入口とも同じ位置・同じcode、Undo一回で元に戻る。Pack詳細やlibrary sourceへ誤挿入しない。
 
@@ -101,9 +130,16 @@ C# Provider Status / .NET runtime / Workspace Trust：
 
 **前提**：lab。QA Python Greeting / QA HTML Card、対応target file、Policy none。
 
-**操作**：それぞれ空行へInsert → Undo一回。Copy to Global → Default Pack。元codeをもう一度Insertし、Clean Copy Current File → Readable → Preview / Untitled document。Escで出力中止。
+**操作**：それぞれ空行へInsert → Undo一回。Copy to Global → Default Pack。元codeをもう一度Insertし、Clean Copy Current File → Readable → Preview / Untitled document。
+read-only tabと、その後の**Exact final Clean Copy preview picker**を確認し、picker内の**Cancel — no output**を選びEnter。Escで試す場合もこのpickerへfocusします。tabのCloseで中止したとは判断しません。
 
 **期待**：非C#で基本機能が使える。Global locationが増える。Cleanは原本を保持し、HTML commentの無理な除去やminifyをしない。Previewだけではclipboardが変わらない。
+普通のPython / HTMLにTCP markerがなければ、Readable / Competitiveで内容が変わらないのは正常です。generic Customにも通常 / XML comment除去はありません。
+
+**marker除去のpositive試験（追加）**：labで`let qaMarkerValue = 1;`だけをJS Snippetとして作成し、空のJS target（先頭の通常`//` commentだけは可）へInsert with Options → None → TCP identity markersをcheckして挿入します。
+挿入後に実際のTCP BEGIN / ENDがあることを確認し、Current File → Readable → Previewへ進むとmarkerのcomment本文だけが消え、codeと改行は残ります。
+markerが付かない場合はwarningと元codeを記録します。quote / slash / `<` / `>`等を含むSnippet本体はgeneric生成で省略され得ます。
+C# ordinary / XML comment除去のpositive試験は.NETがあるQ29のCustomで行い、markerなしの出力を「除去失敗」としないでください。
 
 記録：結果［未実施］／clicks［ ］／keys［ ］／時間［ ］／発見［ ］／直感性［ ］／復帰［ ］／問題・報告ID［ ］
 
@@ -131,7 +167,7 @@ C# Provider Status / .NET runtime / Workspace Trust：
 
 **前提**：labの`targets/insert.js`へQA GreetingをInsert済み。clipboardへ確認用textを手動copyしておく。
 
-**操作**：Selectionを作りReadable → Preview → Esc。Current FileでCompetitive → Preview → Open Untitled document。Current FileでCustom（表示されたtransformだけ選択）→ Clipboard。Readable → Save Asで`lab/clean-result.js`という新規fileを作る。
+**操作**：Selectionを作りReadable → Preview。表示されたExact final Clean Copy previewの**picker内**でCancel — no outputを選びEnter（またはpickerにfocusしたままEsc）。Current FileでCompetitive → Preview → Open Untitled document。Current FileでCustom（表示されたtransformだけ選択）→ Clipboard。Readable → Save Asで`lab/clean-result.js`という新規fileを作る。
 
 **期待**：原本不変、Preview中止でclipboard不変。Untitled / Clipboard / 新規fileが各final previewと一致。generic CompetitiveはReadableと同じ安全な範囲。usage countは増えない。
 
@@ -260,7 +296,7 @@ Copy-Item -LiteralPath "$qa/variants/QA-Conflict" -Destination "$qa/lab/.snippet
 
 **前提**：Q10のarchive。別run推奨。runの`invalid-pack.tcp-sp`は意図的な非ZIP text。
 
-**操作**：Import PreviewでEsc、library不変確認。既存Packへ同archiveを再ImportしFork whole Pack → Fork、未知参照warningを確認。Q21のconflict入りlibraryへ元archiveをImportしてCompare、通常Importが出ないことを確認。不正archiveもImportして拒否を確認。
+**操作**：Import Previewの**action pickerにfocusしたまま**Esc、library不変確認（preview tabのCloseとは別）。既存Packへ同archiveを再ImportしFork whole Pack → Fork、未知参照warningを確認。Q21のconflict入りlibraryへ元archiveをImportしてCompare、通常Importが出ないことを確認。不正archiveもImportして拒否を確認。
 
 **期待**：Cancel / failureで既存root不変。ForkはPack / SnippetのUUID群を更新し既知dependencyもremap。conflict時は自動Import / Replaceなし。壊れたZIPは検証で拒否しTCPが利用不能にならない。
 

@@ -6,7 +6,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const manifest = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'));
 const commands = new Set(manifest.contributes.commands.map(item => item.title));
 const settings = new Set(Object.keys(manifest.contributes.configuration.properties));
-const files = ['README.md', 'docs/user-guide.md', 'qa/fixtures/README.md',
+const files = ['README.md', 'docs/user-guide.md', 'docs/qa-feedback-review-results.md', 'qa/fixtures/README.md',
   ...(await fs.readdir(path.join(root, 'docs/ja'))).filter(name => name.endsWith('.md')).map(name => 'docs/ja/' + name)];
 const problems = []; let links = 0, titles = 0, identifiers = 0;
 for (const file of files) {

@@ -33,6 +33,8 @@ Pack詳細では含まれるSnippet名と各**Insert** buttonを表示します�
    Command Paletteからも実行できます。空選択はエラーです。
 2. ファイル全体なら**Turbo Code Palette: Create Snippet from Current File**を実行します。未保存のeditor内容もcapture対象なので、内容を確認してください。
 3. 空のSnippetならSnippets見出しの`+`、または**Turbo Code Palette: New Snippet**を実行します。
+   Newは指定filenameの**中身が空のsource**を作ります。作成formにもその説明が表示されます。
+   Save後は自動で通常editorに開くので、そこへcodeを書きます。追加通知は出しません。
 4. **Choose destination library**で`Workspace 1`等または`Global`を選びます。候補が1つなら省略されます。
 5. **Choose destination Pack**で**Default Pack**または**New Pack**を選びます。New Packでは名前も入力します。
 6. 中央のMetadata Formを入力して**Save**します。保存後に詳細へ戻り、新規Snippetのsourceが通常editorで開きます。
@@ -99,18 +101,23 @@ TCPのversionは`vMAJOR.MIDDLE.MINOR[-PATCH]`で、例えば`v1.0.0 < v1.0.0-0 <
 1. Snippetsの虫眼鏡、または**Turbo Code Palette: Search Snippets**を実行します。Pack検索は**Turbo Code Palette: Search Packs**です。
 2. queryを入力し、先頭の**Apply filter (N items)**を選んでEnterすると、sidebarへfilterが適用されます。
    modifier候補を選ぶとqueryへ追加されるため、最後にApply filterを実行します。
-3. filter解除は同じ検索で入力を空にし、Apply filterを実行します。Escだけでは前のfilterを解除しません。
-4. 行の右クリック **Turbo Code Palette: Toggle Favorite**、または詳細の**Favorite / Unfavorite**で切り替えます。
-5. 見出しのfilter、または**Turbo Code Palette: All / Favorites / Recent**で**All / Favorites / Recent**を選びます。両treeへ適用され、検索queryとの組合せになります。
+3. 条件候補の選択はqueryを組み立てる操作です。選択後は末尾に空白が入り、他の言語・tag等の候補も選べます。
+   `lang:` / `tag:`等を入力すると、その種類の値を追加表示できます。候補は全catalogから作られ、現在の検索結果だけに閉じません。
+   最後にApply filterを選びEnterします。文字入力だけではsidebarへ適用しません。
+4. filter解除は**Clear search**を選びEnter、または入力を空にしてApply filterです。検索Quick PickにfocusがあるときのEscは今回のquery編集を中止し、前のfilterを保持します。
+5. 行の右クリック **Turbo Code Palette: Toggle Favorite**、または詳細の**Favorite / Unfavorite**で切り替えます。
+6. 見出しのfilter、または**Turbo Code Palette: All / Favorites / Recent**で**All / Favorites / Recent**を選びます。両treeへ適用され、検索queryとの組合せになります。
 
 ```text
 greeting lang:javascript
 tag:qa scope:workspace
-pack:"QA Web Components"
+pack:"QA-Web"
 version:">=v1.0.0 <v2.0.0"
 ```
 
 modifierは`lang` / `tag` / `category` / `pack` / `scope` / `version` / `author` / `feature`です。不正なqueryはエラーとなり、無条件検索に切り替わりません。
+`pack:`の値は現在、一覧に表示されるPack directory名です。Packのmetadata上の表示名と違う場合は候補から選んでください。
+以前の版でApply行が文字入力により隠れた問題は修正しました。修正版VSIXを同じ隔離profileへ再インストールして確認します。
 Favorite / Recent / usage countはasset metadataではなくprofileのuser stateです。
 **Recentは詳細表示でも更新されます**。usage countはInsert完全成功時だけ増えます。Cancel、Previewのみ、Clean Copyでは増えません。
 検索queryやAll等の表示filterの再起動後復元は実装されていません。Favorite / Recent / countの保存とは区別します。
@@ -121,8 +128,9 @@ Favorite / Recent / usage countはasset metadataではなくprofileのuser state
 
 まず挿入先の通常text editorでcursor / selectionを決めます。次のどの入口も同じInsertion pipelineです。
 
-- Snippets行の矢印の**Insert**。
-- Snippet右クリック → **Insert → Default Mode / Choose Mode… / Turbo Code Palette: Insert Snippet with Options…**。
+- Snippets行にhoverして表示される矢印を**左クリック**するInsert。矢印自体を右クリックする操作ではありません。
+- **Snippetの名前の行**を右クリック → **Insert** submenu。通常Insert、mode選択、Optionsの入口があります。
+  通常Insertはcommand名**Turbo Code Palette: Insert Snippet**（場所によってshort titleのDefault Mode）、mode選択は**Turbo Code Palette: Insert Snippet with Mode…**（Choose Mode…）です。
 - Command Paletteの**Turbo Code Palette: Insert Snippet** / **Turbo Code Palette: Insert Snippet with Mode…** / **Turbo Code Palette: Insert Snippet with Options…**。
 - Snippet詳細の**Insert / Insert with Options…**、Pack詳細の各Snippetの**Insert**。
 
@@ -181,6 +189,8 @@ replacementはliteral one-passです。値の言語構文エスケープを自�
 dependencyはUUIDと全version constraintで解決し、name mismatchはwarningです。Workspace優先で候補を探しますが、既存Packの依存はPack内で解決します。
 再帰依存はdependency-firstの安定順、cycleは安定順で扱います。
 検証済みの既存実装は再利用できますが、名前・marker・部分text一致だけで同一とは断定しません。適合候補なし・曖昧・content conflictでは停止します。
+現状は通常Snippet / Templateの要求元にも重複防止が適用されます。同じUUIDのTemplateを同じ検証済みdocumentへ再Insertすると入力前にskipします。
+`for`文等の繰返し利用は現状の制約です。依存の安全性と分離する仕様は承認待ちで、今回この挙動は変更していません。
 
 ## 基本：Copy・Import / Export・Conflict
 
@@ -236,6 +246,8 @@ library root変更後もReloadが必要です。エラー時に個人データ�
 | Save As | 新規fileへ保存。原本・library asset・alias / symlink経由の原本・既存fileへは上書きしない |
 
 Previewと実出力は同じfinal planです。Previewを見ただけでclipboardは更新されません。
+出力pickerとPreview後のpickerには**Cancel — no output**があります。この行を選んでEnterするか、**そのpickerにfocusがある状態**でEscを押して中止します。
+Previewのeditor tabをCloseする操作は、処理のCancelとは別です。Cancel後もread-only preview tabが残ることがあります。
 入力中に元document / catalog / root / policyが変わると停止します。
 Cancel / failureではclipboard / file / usage countを更新しません。
 
@@ -246,6 +258,13 @@ Cancel / failureではclipboard / file / usage countを更新しません。
 | Custom | 提供されるtransformだけ選択 | marker、ordinary comments、XML docs、unused using、normalization等、条件を満たすもの |
 
 string / raw string / template literal等と区別できないmarker候補は保持しwarningにします。
+JS / TS / Pythonでは、既に字句contextが確実な位置から始まる独立した通常line commentを通過できます。
+文字列・block comment・markup・escape等で不確実になった後に、comment風の行を見つけても安全な状態へ復帰しません。
+Insert時のgeneric marker生成はさらに狭く、Snippet本体のquote、slash、`<` / `>`等で省略する場合があります。C#の**生成**も現在はこの狭い処理です。
+C#の**除去**は利用可能なRoslyn Providerでsyntax-awareに行います。この違いにより、marker ONでも元々付加されていないことがあります。
+出力pickerには適用planのtransform IDを表示します。対象markerがない普通のJS / Python / HTMLでReadable / Competitiveの結果が変わらないのは正常です。
+通常commentやXML docの除去は、C# Providerが利用可能な場合のCustomで対象transformだけを選びます（Spaceでcheck、Enterで確定）。
+generic Customには通常comment除去は表示されません。AtCoder Policy中の保護comment、Source URL、notice等はC# Customでも保持します。
 generic comment除去、rename、unused member削除、code golf、危険なminifyは行いません。
 Selectionでは一部の全document変換が利用できません。C# parse / semantic条件不足時の無理なfallbackもありません。
 
@@ -295,6 +314,10 @@ C#設定の変更後は**Developer: Reload Window**が必要です。Policy / at
 schema補完は編集支援であり、実行時のpath / dependency / identity検証の代用ではありません。
 不要なJSON全体の再生成はせず、未知fieldを残してください。formの既存exports行では`originalIndex`を保持すると未知child fieldを維持できます。
 unknown fieldは構造編集で保持されますが、利用者がraw editorで消したものを復元する機能ではありません。
+例えば`"test": "test"`はSave・Reload・既知項目のform編集後にも保持されますが、TCPはその意味を解釈しません。
+詳細のMetadata / unknown fieldsで原文を確認できるだけで、tag・検索条件・挿入設定・実行commandへ自動変換されません。
+未知fieldもassetのcontent fingerprintには含まれます。別locationの同一UUID / versionでその内容だけが違う場合もConflictになり得ます。
+既存exportsのJSON行からnamespace / container / signatureを省略すると、その既知optional fieldは削除できます。未知のchild fieldは保持します。
 
 Snippetの例です。`sources`は保存file、`source`は由来URLです。次のUUIDは説明用なので実データのidentityへ流用せず、QAのコピーで試します。
 
@@ -336,6 +359,8 @@ Template名は英字または`_`から始まる英数字 / `_`です。
 複数sourceの作成は、まず1 sourceでSaveし、Snippet directoryへ通常fileを追加してから、既存formの**Sources**またはraw JSONの`sources`へ相対pathを登録します。
 例：`["lib/message.js", "main.js"]`。Save / Reload / 明示version更新の手順を守ります。
 専用の複数file capture wizardはありません。absolute / traversal / link等は使用できません。
+詳細の個別Source操作はOpen source in editorです。個別Reveal / Add Source / Remove Source buttonは未実装です。
+Sourcesの参照を外す操作と物理fileの削除は別です。参照を外しただけではdirectory内のfileは消えません。
 `separate-files`はsourceの相対pathを新規folder内へ保ちます。`sourceOverrides`は保持・表示のみで、source別override実行は未対応です。
 
 ## 応用：C# Roslyn Provider
@@ -355,6 +380,9 @@ VSIXにはframework-dependent helperが同梱されます。既存.NET 10 runtim
 既定はstandalone C#14です。projectのcsproj / MSBuild / generator / scriptは実行しません。
 必要ならLanguage Version / Definesを明示しReload Windowします。外部assembly等が不足するsemantic操作は成功扱いにしません。
 試験用`csharp/namespace.cs`のnamespace領域では**QA CSharp Dep**、class内部では**QA CSharp Member**を使えます。
+複数のstructure-aware依存は現在、全Snippetで共通の明示targetsを持つbatchに限定します。
+memberとnamespace / using等の異なるtargetが混在すると理由付きで停止し、何もapplyしません。個別配置への拡張は仕様承認待ちです。
+CRLF targetでは構文triviaの改行を合わせますが、raw string等のliteral token内の改行はデータとして保存します。
 
 ### Semantic Dependency BundleとClean Copy
 

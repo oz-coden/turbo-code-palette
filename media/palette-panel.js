@@ -20,7 +20,11 @@
             ...(row.dataset.index === undefined ? {} : { originalIndex: Number(row.dataset.index) }),
             id: row.dataset.id, name: row.dataset.name, version: row.querySelector('[data-constraint]').value,
         }));
-        return { fields, members: members(), dependencies, exports: document.querySelector('#exports-json') ? JSON.parse(document.querySelector('#exports-json').value) : undefined, sourceName: form.querySelector('[name="sourceName"]')?.value };
+        const exportsField = document.querySelector('#exports-json');
+        // An omitted qualifier means deletion only when the user actually edited
+        // this JSON field. Name-only saves must preserve unrepresented values.
+        const exports = exportsField && exportsField.value !== exportsField.defaultValue ? JSON.parse(exportsField.value) : undefined;
+        return { fields, members: members(), dependencies, exports, sourceName: form.querySelector('[name="sourceName"]')?.value };
     };
     form?.addEventListener('input', () => send('dirty'));
     form?.addEventListener('submit', event => { event.preventDefault(); let values; try { values = draft(); } catch { feedback.textContent = 'Invalid exports JSON.'; return; } for (const button of form.querySelectorAll('button')) { button.disabled = true; } send('save', values); });

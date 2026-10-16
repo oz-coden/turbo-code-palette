@@ -377,12 +377,12 @@
             "atcoder-20261014"
           ],
           "default": "none",
-          "description": "Independent of presets. AtCoder policy validates provenance assertions and preserves attribution; it does not certify eligibility or verify web publication."
+          "description": "Optional, independent of presets. AtCoder requires Source URLs and public-before-start assertions, preserves non-marker comments and notices, and allowlists transforms. It does not verify publication, certify eligibility or permit in-contest AI use. None keeps general options."
         },
         "turboCodePalette.atcoderContestStartsAt": {
           "type": "string",
           "default": "",
-          "description": "Contest start ISO 8601 timestamp with timezone. Only compared with declared source[].publishedAt assertions; web publication is not independently verified."
+          "description": "Legacy optional AtCoder policy only; unused when compliancePolicy is none. Contest start ISO 8601 timestamp with timezone, compared only with source[].publishedAt assertions. No independent publication verification."
         },
         "turboCodePalette.sourceMarkers": {
           "type": "boolean",

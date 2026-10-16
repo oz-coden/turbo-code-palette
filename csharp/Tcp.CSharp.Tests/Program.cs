@@ -120,4 +120,27 @@ Test("full attribution details are independent of identity markers and reject li
     Check(output.Contains("Source URL:")); Check(output.Contains("Snippet: A v1.0.0 | Authors: Author")); Check(output.Contains("TCP License: Keep")); Check(!output.Contains("TCP BEGIN")); Run("validate", output);
     Reject(() => Run("header", source, new { details = new[] { "bad\nline" } }));
 });
+Test("CRLF placement normalizes trivia while preserving multiline literal token data", () => {
+    const string before = "namespace N;\r\nclass A {}\r\n";
+    var ordinary = Run("place", before, new { offset = before.Length, source = "class B\n{\n}\n", targets = new[] { "namespace" } });
+    Check(!Output(ordinary).Replace("\r\n", "", StringComparison.Ordinal).Contains('\n')); Run("validate", before.Insert(ordinary.GetProperty("offset").GetInt32(), Output(ordinary)));
+    const string literal = "\"\"\"\nfirst\nsecond\n\"\"\"";
+    var raw = Run("place", before, new { offset = before.Length, source = "class Raw { const string Value = " + literal + "; }", targets = new[] { "namespace" } });
+    Check(Output(raw).Contains(literal)); Run("validate", before.Insert(raw.GetProperty("offset").GetInt32(), Output(raw)));
+    var explicitLf = Run("place", "class A { string S = @\"a\r\nb\"; }\n", new { offset = 0, source = "class B {}", targets = new[] { "namespace" }, eol = "\n" });
+    Check(Output(explicitLf).StartsWith("\nclass B", StringComparison.Ordinal));
+    Reject(() => Run("place", before, new { offset = 0, source = "class B {}", targets = new[] { "namespace" }, eol = "invalid" }));
+});
+Test("file-scoped namespace placement includes trailing EOF comments and blank lines", () => {
+    const string before = "// header\nnamespace N;\nclass A {}\n\n// trailing notice\n\n";
+    var placed = Run("place", before, new { offset = before.Length, source = "class B {}", targets = new[] { "namespace" } });
+    Check(placed.GetProperty("offset").GetInt32() == before.Length); Run("validate", before.Insert(before.Length, Output(placed)));
+});
+Test("Roslyn marker Clean handles prior comments, strings and comparison/generic syntax", () => {
+    var identity = "{\"id\":\"73000000-0000-4000-8000-000000000001\",\"version\":\"v1.0.0\"}";
+    var begin = "// TCP BEGIN " + identity[..^1] + ",\"contentHash\":\"" + new string('a', 64) + "\"}\n";
+    var source = "// ordinary header\nclass A { string S=\"// literal\"; bool M(int x) => x < 10; }\n" + begin + "class B {}\n// TCP END " + identity + "\n";
+    var cleaned = Output(Run("clean", source, new { transforms = new[] { "remove-tcp-markers" }, start = 0, end = source.Length }));
+    Check(!cleaned.Contains("TCP BEGIN")); Check(cleaned.Contains("// ordinary header")); Check(cleaned.Contains("\"// literal\"")); Check(cleaned.Contains("x < 10"));
+});
 Console.WriteLine($"Roslyn tests passed: {count}");

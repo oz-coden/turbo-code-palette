@@ -1,4 +1,5 @@
 import { sha256 } from '../core/assets/fingerprint';
+import { provenCommentBoundary } from './cleanMarkers';
 
 export interface SourceMarkerIdentity { readonly id: string; readonly version: string }
 export interface MarkerEvidence extends SourceMarkerIdentity { readonly contentHash: string }
@@ -14,7 +15,8 @@ export function markSource(identity: SourceMarkerIdentity, body: string, languag
 	if (start !== 0 && before[start - 1] !== '\n' || end !== before.length && end !== 0 && before[end - 1] !== '\n') { return; }
 	// A quote, escape, slash, directive, backtick or possible JSX/XML context requires a real lexer.
 	// Refuse this optional annotation rather than extending the generic placement provider.
-	if (/["'`\\/#<>]/.test(before.slice(0, start)) || /["'`\\/#<>]/.test(body) || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(body)) { return; }
+	const lineCommentProof = ['javascript', 'typescript', 'javascriptreact', 'typescriptreact', 'python'].includes(language);
+	if ((lineCommentProof ? !provenCommentBoundary(before.slice(0, start), language) : /["'`\\/#<>]/.test(before.slice(0, start))) || /["'`\\/#<>]/.test(body) || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(body)) { return; }
 	const text = body.replace(/\r\n|\r|\n/g, eol), evidence = { id: identity.id, version: identity.version, contentHash: sha256(text) };
 	return `${prefix} TCP BEGIN ${JSON.stringify(evidence)}${eol}${text}${text.endsWith(eol) ? '' : eol}${prefix} TCP END ${JSON.stringify({ id: identity.id, version: identity.version })}${eol}`;
 }

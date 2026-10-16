@@ -13,7 +13,7 @@ export class CSharpProvider {
 	}
 	async analyze(sources: readonly string[]) { return this.client.request('analyze', sources.map((source, i) => ({ id: 'source-' + i + '.cs', source }))); }
 	async validate(source: string): Promise<string[]> { const response = await this.client.request('validate', [{ id: 'target.cs', source }]); return response.diagnostics; }
-	async place(source: string, incoming: string, offset: number, targets: readonly string[]) { return this.client.request('place', [{ id: 'target.cs', source }], { source: incoming, offset, targets }); }
+	async place(source: string, incoming: string, offset: number, targets: readonly string[], eol?: '\n' | '\r\n') { return this.client.request('place', [{ id: 'target.cs', source }], { source: incoming, offset, targets, ...(eol ? { eol } : {}) }); }
 	async header(source: string, notices: readonly string[], urls: readonly string[], details: readonly string[] = []): Promise<string> { return (await this.client.request('header', [{ id: 'output.cs', source }], { notices, urls, details })).result.text; }
 	async markers(source: string) { return (await this.client.request('markers', [{ id: 'target.cs', source }])).result.markers; }
 	cleanProvider(): CleanLanguageProvider {

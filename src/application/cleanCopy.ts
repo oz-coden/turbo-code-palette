@@ -13,7 +13,7 @@ import { attachAttribution, collectAttribution } from '../language/attribution';
 import { resolveInsertOptions, type InsertOptions } from '../core/insertion/options';
 import type { CSharpProvider } from '../language/csharpProvider';
 import { csharpBundleRoots, csharpBundleText } from './csharpBundle';
-import type { CleanFragment, CleanPlan, CleanPreset, CleanScope, CleanTransform } from '../core/clean/types';
+import type { CleanFragment, CleanPlan, CleanPreset, CleanScope, CleanTransform, CleanLanguageProvider } from '../core/clean/types';
 import { bundleCandidates, bundleClosure, bundleReviewPlan, type ReferenceCandidate } from './cleanBundle';
 import { loadCatalog, type AssetLocation } from '../storage/discovery';
 import { publishCleanOutput, type CleanOutputProtection } from '../storage/cleanOutput';
@@ -24,7 +24,7 @@ export type CleanOutput = 'clipboard' | 'preview' | 'save' | 'untitled';
 export interface CleanInteractions {
 	origins?(all: readonly AssetLocation[]): Promise<readonly AssetLocation[] | undefined>;
 	bundleMode?(): Promise<'semantic' | 'review' | undefined>;
-	preset(): Promise<CleanPreset | undefined>;
+	preset(provider?: CleanLanguageProvider, diagnostic?: string): Promise<CleanPreset | undefined>;
 	custom(available: readonly CleanTransform[]): Promise<readonly string[] | undefined>;
 	bundle(candidates: readonly ReferenceCandidate[], all: readonly AssetLocation[]): Promise<readonly AssetLocation[] | undefined>;
 	warnings(plan: CleanPlan): Promise<boolean>;
@@ -44,11 +44,11 @@ export class CleanCopy implements vscode.Disposable {
 		private readonly rootGuard: () => void = () => {}, interactions?: CleanInteractions, private readonly csharp?: CSharpProvider) {
 		this.interactions = interactions ?? {
 			origins: all => this.chooseOrigins(all),
-			preset: async () => (await vscode.window.showQuickPick([
-				{ label: 'Readable', description: 'Proven TCP markers only; preserve notices and attribution' },
-				{ label: 'Competitive', description: 'Use supported language transforms; no obfuscation. Generic provider preserves text.' },
-				{ label: 'Custom', description: 'Choose available provider transforms; always preserve notices' },
-			], { title: 'Clean Copy preset' }))?.label as CleanPreset | undefined,
+			preset: async (provider, diagnostic) => (await vscode.window.showQuickPick([
+				{ label: 'Readable', description: 'Remove proven TCP markers only; ordinary/XML comments remain' },
+				{ label: 'Competitive', description: provider?.id === 'csharp-roslyn-v1' ? 'Roslyn: proven unused usings and safe whitespace; ordinary/XML comments remain' : 'Generic: same safe marker transform as Readable; ordinary comments and whitespace remain' },
+				{ label: 'Custom', description: provider?.id === 'csharp-roslyn-v1' ? 'Choose Roslyn transforms, including ordinary/XML comments; protected notices remain' : 'Available marker transforms only; ordinary/XML comment removal needs a syntax provider' },
+			], { title: 'Clean Copy preset', placeHolder: diagnostic ?? 'Choose supported transforms. Original files remain unchanged.' }))?.label as CleanPreset | undefined,
 			custom: async available => {
 				if (!available.length) { return []; }
 				return (await vscode.window.showQuickPick(available.map(transform => ({ label: transform.label, id: transform.id, picked: true })), { title: 'Custom transforms (notices always preserved)', canPickMany: true }))?.map(item => item.id);
@@ -62,10 +62,10 @@ export class CleanCopy implements vscode.Disposable {
 			},
 			warnings: async plan => await vscode.window.showWarningMessage(plan.warnings.join('\n'), { modal: true }, 'Continue') === 'Continue',
 			output: async plan => (await vscode.window.showQuickPick([
-				{ label: 'Clipboard', value: 'clipboard' as const }, { label: 'Preview / Untitled document', value: 'preview' as const }, { label: 'Save As', value: 'save' as const },
-			], { title: plan.reviewOnly ? 'Clean Copy output — review JSON, not executable code' : 'Clean Copy output', placeHolder: 'Original document/file is never modified.' }))?.value,
+				{ label: 'Clipboard', description: 'Copy the final text now', value: 'clipboard' as const }, { label: 'Preview / Untitled document', description: 'Inspect first, then choose output or Cancel', value: 'preview' as const }, { label: 'Save As', value: 'save' as const }, { label: 'Cancel — no output', value: undefined },
+			], { title: plan.reviewOnly ? 'Clean Copy output — review JSON, not executable code' : 'Clean Copy output', placeHolder: `Transforms: ${plan.transforms.join(', ') || 'none'}. Originals stay unchanged.`, ignoreFocusOut: true }))?.value,
 			preview: async plan => {
-				return (await vscode.window.showQuickPick([{ label: 'Copy to Clipboard', value: 'clipboard' as const }, { label: 'Open Untitled document', value: 'untitled' as const }, { label: 'Save As', value: 'save' as const }], { title: 'Exact final Clean Copy preview', placeHolder: 'Escape closes this operation without changing clipboard/files.' }))?.value;
+				return (await vscode.window.showQuickPick([{ label: 'Copy to Clipboard', value: 'clipboard' as const }, { label: 'Open Untitled document', value: 'untitled' as const }, { label: 'Save As', value: 'save' as const }, { label: 'Cancel — no output', value: undefined }], { title: 'Exact final Clean Copy preview', placeHolder: 'Choose output or Cancel here. Escape cancels this picker; closing the preview tab is separate.', ignoreFocusOut: true }))?.value;
 			},
 			destination: async plan => vscode.window.showSaveDialog({ title: 'Clean Copy — new file only', defaultUri: vscode.workspace.workspaceFolders?.[0]?.uri.scheme === 'file' ? vscode.Uri.joinPath(vscode.workspace.workspaceFolders[0].uri, 'tcp-clean' + plan.extension) : undefined, saveLabel: 'Save new copy (never overwrite)' }),
 			clipboard: async text => vscode.env.clipboard.writeText(text),
@@ -117,7 +117,7 @@ export class CleanCopy implements vscode.Disposable {
 				associated.push(...matches);
 			}
 			if (resolved.options.attribution !== 'none' && !confirmedOrigins.length) { const choice = await this.interactions.origins?.(snapshot.snippets.filter(asset => asset.usable && !asset.root.uri)); if (!choice) { return 'cancelled'; } if (choice.some(asset => !snapshot.snippets.includes(asset))) { throw new Error('Unknown source origin.'); } confirmedOrigins = choice; associated.push(...choice); if (!choice.length) { warnings.push('Current text origin is explicitly unlinked. Existing source comments are preserved; attribution completeness cannot be verified.'); } }
-			const preset = await this.interactions.preset(); if (!preset) { return 'cancelled'; }
+			const preset = await this.interactions.preset(providerFor(fragment.language), providerStatus && !providerStatus.available ? providerStatus.reason + ' Generic mode preserves ordinary/XML comments.' : undefined); if (!preset) { return 'cancelled'; }
 			let selected: readonly AssetLocation[] = [], bundleAssets: readonly AssetLocation[] = [], semantic = false;
 			if (scope === 'bundle') {
 				if (document.languageId === 'csharp' && semanticProvider && this.interactions.bundleMode) { const mode = await this.interactions.bundleMode(); if (!mode) { return 'cancelled'; } semantic = mode === 'semantic'; }

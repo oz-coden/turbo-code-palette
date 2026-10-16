@@ -10,18 +10,19 @@ export class ChangeTracker {
 	private timer?: ReturnType<typeof setTimeout>;
 	private running = false;
 	private again = false;
+	private sticky = false;
 	constructor(private readonly expected: () => CatalogSnapshot | undefined, private readonly read: () => Promise<CatalogSnapshot>,
 		private readonly notify: () => Promise<void>, private readonly badge: (pending: boolean) => void) {}
 	event(): void { clearTimeout(this.timer); this.timer = setTimeout(() => { void this.check().catch(() => this.changed()); }, 500); }
-	async changed(): Promise<void> { this.pending = true; this.badge(true); if (!this.notified) { this.notified = true; void this.notify().catch(() => {}); } }
+	async changed(sticky = true): Promise<void> { this.sticky ||= sticky; this.pending = true; this.badge(true); if (!this.notified) { this.notified = true; void this.notify().catch(() => {}); } }
 	async check(): Promise<void> {
 		if (this.running) { this.again = true; return; } this.running = true;
 		try {
 			if (snapshotStamp(await this.read()) !== snapshotStamp(this.expected())) {
-				await this.changed();
-			}
+				await this.changed(false);
+			} else if (this.pending && !this.sticky) { this.reloaded(); }
 		} finally { this.running = false; if (this.again) { this.again = false; this.event(); } }
 	}
-	reloaded(): void { this.pending = false; this.notified = false; this.badge(false); }
+	reloaded(): void { this.pending = false; this.notified = false; this.sticky = false; this.badge(false); }
 	dispose(): void { clearTimeout(this.timer); }
 }

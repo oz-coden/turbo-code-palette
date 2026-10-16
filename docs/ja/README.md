@@ -13,6 +13,7 @@ TCPの操作名は現在英語です。このガイドでは画面・Command Pal
 | [手動QAチェックリスト](manual-qa.md) | 操作数・発見性も記録する検証手順 |
 | [不具合報告テンプレート](bug-report.md) | Codexへ渡す再現情報と共有前の伏字 |
 | [準備作業の検証結果](qa-preparation-results.md) | 今回の確認範囲、生成VSIX、実装との照合で分かった制約 |
+| [手動QA・Argonレビュー対応](../qa-feedback-review-results.md) | フィードバック後の修正・保証範囲・仕様承認待ちの提案 |
 | [Phase 7結果](../phase7-results.md) / [既知制限](../known-issues.md) | 既存の自動テスト実績、未完了の実操作QA |
 
 ## 1. VSIXの用意

@@ -7,7 +7,7 @@ export interface InsertionLanguageProvider extends AttributionLanguageProvider {
 	readonly configured: boolean;
 	availability(): Promise<{ available: boolean; reason: string }>;
 	markers(source: string): Promise<readonly MarkerEvidence[]>;
-	place(source: string, incoming: string, offset: number, targets: readonly string[]): Promise<{ result: { offset: number; text: string; context: string }; diagnostics: string[] }>;
+	place(source: string, incoming: string, offset: number, targets: readonly string[], eol?: '\n' | '\r\n'): Promise<{ result: { offset: number; text: string; context: string }; diagnostics: string[] }>;
 	validate(source: string): Promise<string[]>;
 }
 export interface AttributionLanguageProvider {

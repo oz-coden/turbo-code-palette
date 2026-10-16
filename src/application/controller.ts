@@ -17,7 +17,7 @@ import { vscodeStore } from '../storage/vscodeStore';
 import { resolveRoots, type StorageRoot } from '../storage/roots';
 import { loadCatalog, type AssetLocation } from '../storage/discovery';
 import { containedPath, validateRelativePath, validateStoragePath } from '../storage/safePaths';
-import { searchAssets, modifierSuggestions } from '../core/search/index';
+import { searchPickerItems, type SearchPickerItem } from '../ui/searchPicker';
 import { resolveClosure } from '../core/dependency/resolver';
 import { pendingRecovery, recover } from '../storage/recovery';
 import { ComparisonDocuments } from '../ui/comparison';
@@ -135,7 +135,7 @@ export class LibraryController implements vscode.Disposable {
 		});
 		register('configureInsertDefaults', async () => { await vscode.commands.executeCommand('workbench.action.openSettings', 'turboCodePalette.sourceAttribution'); });
 		register('configureCompliancePolicy', async () => {
-			const chosen = await vscode.window.showQuickPick([{ label: 'None — general use', value: 'none' }, { label: 'AtCoder ABC/ARC/AGC — 2026-10-14', value: 'atcoder-20261014' }], { title: 'Optional Compliance Policy', placeHolder: 'Independent of presets. No automatic publication verification or eligibility certification.' }); if (!chosen) { return; }
+			const chosen = await vscode.window.showQuickPick([{ label: 'None — general use', description: 'Use ordinary attribution/transform options; no contest conditions', value: 'none' }, { label: 'AtCoder ABC/ARC/AGC — 2026-10-14', description: 'Require URLs and pre-start publication assertions; protect comments; allowlist transforms', value: 'atcoder-20261014' }], { title: 'Optional Compliance Policy', placeHolder: 'Independent of presets. No automatic publication verification, in-contest AI permission or eligibility certification.' }); if (!chosen) { return; }
 			let start: string | undefined;
 			if (chosen.value !== 'none') { start = await vscode.window.showInputBox({ title: 'Contest start (explicit timezone required)', prompt: 'ISO 8601, for example 2026-10-17T21:00:00+09:00. Publication metadata remains an unverified assertion.', value: vscode.workspace.getConfiguration('turboCodePalette').get('atcoderContestStartsAt', ''), validateInput: value => /T.*(?:Z|[+-][0-9]{2}:[0-9]{2})$/.test(value) && Number.isFinite(Date.parse(value)) ? undefined : 'Enter a timestamp with an explicit timezone.' }); if (start === undefined) { return; } }
 			const current = vscode.workspace.getConfiguration('turboCodePalette'); if (start !== undefined) { await current.update('atcoderContestStartsAt', start, vscode.ConfigurationTarget.Global); } await current.update('compliancePolicy', chosen.value, vscode.ConfigurationTarget.Global);
@@ -285,7 +285,7 @@ export class LibraryController implements vscode.Disposable {
 		if (chosenRoot && !this.roots().some(root => sameRoot(root, chosenRoot))) { throw new Error('Creation target is no longer configured.'); }
 		const root = chosenRoot ?? await this.target(); if (!root) { return; }
 		const destination = mode === 'pack' ? {} : await this.destination(); if (!destination) { return; }
-		const seed: FormSeed = { kind: mode === 'pack' ? 'pack' : 'snippet', name, language, sourceName, members: [], destination: `${root.scope} · ${destination.name ?? (mode === 'pack' ? 'New Pack' : 'Default Pack')}` };
+		const seed: FormSeed = { kind: mode === 'pack' ? 'pack' : 'snippet', name, language, sourceName, members: [], emptySource: mode === 'new', destination: `${root.scope} · ${destination.name ?? (mode === 'pack' ? 'New Pack' : 'Default Pack')}` };
 		if (await this.panel.form(seed)) { this.creation = { root, packName: destination.name, bytes }; }
 	}
 	private async mutate<T>(operation: () => Promise<T>): Promise<T> {
@@ -307,11 +307,17 @@ export class LibraryController implements vscode.Disposable {
 		if (rows.length > 1) { const result: AssetLocation[] = []; for (const row of rows) { const asset = await this.choose(row.key, undefined, true); if (!asset) { return []; } result.push(asset); } return result; }
 		const asset = await this.choose(input, undefined, true); return asset ? [asset] : [];
 	}
-	async delete(input: unknown): Promise<void> {
+	async delete(input: unknown, confirm?: () => Promise<boolean>): Promise<void> {
 		const assets = await this.selected(input); if (!assets.length) { return; }
 		if (assets.some(asset => !sameRoot(asset.root, assets[0].root) || packOf(asset) !== packOf(assets[0]))) { throw new Error('Select members of one Pack for bulk deletion. Each Pack is saved atomically.'); }
-		const choice = await vscode.window.showWarningMessage(`Delete ${assets.map(asset => asset.metadata.name).join(', ')} from ${assets[0].root.scope}/${assets[0].packName}? Other copies remain.`, { modal: true }, 'Delete');
-		if (choice === 'Delete') { await this.mutate(() => this.library.deleteAssets(assets)); this.panel.saved(); this.panel.dispose(); }
+		const accepted = confirm ? await confirm() : await vscode.window.showWarningMessage(`Delete ${assets.map(asset => asset.metadata.name).join(', ')} from ${assets[0].root.scope}/${assets[0].packName}? Other copies remain.`, { modal: true }, 'Delete') === 'Delete';
+		if (accepted) {
+			const shown = this.panel.current?.asset;
+			const affectsPanel = !!shown && assets.some(asset => sameRoot(asset.root, shown.root) && (locationKey(asset) === locationKey(shown) || asset.metadata.kind === 'pack' && packOf(shown) === asset.relativePath));
+			if (affectsPanel && !await this.panel.confirmDiscard()) { return; }
+			await this.mutate(() => this.library.deleteAssets(assets));
+			if (affectsPanel && this.panel.current?.asset === shown) { this.panel.saved(); this.panel.dispose(); }
+		}
 	}
 	async message(message: Record<string, unknown>): Promise<void> {
 		const action = message.action;
@@ -359,7 +365,8 @@ export class LibraryController implements vscode.Disposable {
 		if (action === 'searchMembers' || action === 'searchDependencies') {
 			if (!this.panel.current?.seed || typeof message.query !== 'string' || message.query.length > 4096) { throw new Error('Invalid search.'); }
 			const result = this.library.catalog.search(message.query); if (result.errors.length) { throw new Error(result.errors.join(', ')); }
-			this.panel.post({ type: 'candidates', token: this.panel.session, purpose: action === 'searchMembers' ? 'members' : 'dependencies', items: result.hits.flatMap(hit => hit.locations.map(asset => ({ key: locationKey(asset), id: asset.metadata.id, name: asset.metadata.name, version: asset.metadata.version!.text, label: `${asset.metadata.name} ${asset.metadata.version!.text} · ${asset.root.scope}/${asset.packName}` }))).slice(0, 100) }); return;
+			const selfId = action === 'searchDependencies' ? this.panel.current.seed.asset?.metadata.id : undefined;
+			this.panel.post({ type: 'candidates', token: this.panel.session, purpose: action === 'searchMembers' ? 'members' : 'dependencies', items: result.hits.flatMap(hit => hit.locations.filter(asset => !selfId || asset.metadata.id !== selfId).map(asset => ({ key: locationKey(asset), id: asset.metadata.id, name: asset.metadata.name, version: asset.metadata.version!.text, label: `${asset.metadata.name} ${asset.metadata.version!.text} · ${asset.root.scope}/${asset.packName}` }))).slice(0, 100) }); return;
 		}
 		if (action === 'cancel') { this.creation = undefined; const asset = this.panel.current?.asset; if (asset) { await this.showDetails(asset); } else { this.panel.dispose(); } return; }
 		if (action === 'source') { if (typeof message.key !== 'string' || typeof message.source !== 'string') { throw new Error('Invalid source.'); } await this.openSource(this.find(message.key), message.source); return; }
@@ -378,13 +385,13 @@ export class LibraryController implements vscode.Disposable {
 	}
 	private async searchView(tree: AssetTree): Promise<void> {
 		const groups = tree.kind === 'snippet' ? this.library.catalog.snapshot?.snippetGroups ?? [] : this.library.catalog.snapshot?.packGroups ?? [];
-		const pick = vscode.window.createQuickPick<vscode.QuickPickItem & { query?: string }>(); pick.title = 'Search ' + (tree.kind === 'snippet' ? 'Snippets' : 'Packs'); pick.placeholder = 'name lang:"C#" tag:graph scope:workspace (Enter applies the filter)'; pick.value = tree.query;
+		const pick = vscode.window.createQuickPick<SearchPickerItem>(); pick.title = 'Search ' + (tree.kind === 'snippet' ? 'Snippets' : 'Packs'); pick.placeholder = 'Type a query or add conditions; select Apply filter and press Enter. Escape keeps the previous search.'; pick.value = tree.query;
 		const update = () => {
-			const result = searchAssets(groups, pick.value);
-			pick.items = [{ label: result.errors.length ? result.errors.join(', ') : `Apply filter (${result.hits.length} items)`, query: result.errors.length ? undefined : pick.value },
-				...(['lang', 'tag', 'category', 'pack', 'scope', 'version', 'author', 'feature'] as const).flatMap(key => modifierSuggestions(groups, key).map(query => ({ label: query, query: (pick.value.trim() + ' ' + query).trim() }))).filter(item => item.label.toLowerCase().includes(pick.value.split(' ').at(-1)!.toLowerCase())).slice(0, 30)];
+			const items = searchPickerItems(groups, pick.value);
+			pick.items = [...items.slice(0, 2), { label: 'Add / change conditions (type lang:, tag:, … for more values)', kind: vscode.QuickPickItemKind.Separator, action: 'error' }, ...items.slice(2)];
+			pick.activeItems = [items[0]];
 		};
-		const change = pick.onDidChangeValue(update), accept = pick.onDidAccept(() => { const item = pick.selectedItems[0]; if (item?.query === undefined) { return; } if (item.label.startsWith('Apply filter')) { tree.query = item.query; this.refresh(); pick.hide(); } else { pick.value = item.query; } });
+		const change = pick.onDidChangeValue(update), accept = pick.onDidAccept(() => { const item = pick.selectedItems[0]; if (item?.query === undefined) { return; } if (item.action === 'apply' || item.action === 'clear') { tree.query = item.query; this.refresh(); pick.hide(); } else { pick.value = item.query; update(); } });
 		pick.onDidHide(() => { change.dispose(); accept.dispose(); pick.dispose(); }); update(); pick.show();
 	}
 	private async openGlobal(reveal: boolean): Promise<void> {
